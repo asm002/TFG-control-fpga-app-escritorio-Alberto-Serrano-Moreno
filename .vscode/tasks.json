@@ -1,0 +1,40 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build C++ with FLTK",
+			"detail": "Use the g++ compiler from MSYS2 UCRT64",
+			"type": "cppbuild",
+			"command": "C:\\msys64\\usr\\bin\\bash.exe",
+			"args": [
+				"-lc",
+				"g++ -fdiagnostics-color=always -g '${workspaceFolder:temperature-control-desktop}\\src\\main.cpp' -o '${workspaceFolder:temperature-control-desktop}\\build\\temperature-control-desktop.exe' $(fltk-config --cxxflags --ldflags)"
+			],
+			"options": {
+				"cwd": "${fileDirname}",
+				"env": {
+					"MSYSTEM": "UCRT64"
+				}
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": false
+			}
+		},
+		{
+			"label": "Build and Run C++ with FLTK",
+			"type": "process",
+			"command": "${workspaceFolder:temperature-control-desktop}\\build\\temperature-control-desktop.exe",
+			"dependsOn": "Build C++ with FLTK",
+			"dependsOrder": "sequence",
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": true
+			}
+		}
+	]
+}
