@@ -25,6 +25,29 @@
 			}
 		},
 		{
+			"label": "Build C++ pruebas.cpp with FLTK",
+			"detail": "Compile pruebas.cpp using g++ from MSYS2 UCRT64",
+			"type": "cppbuild",
+			"command": "C:\\msys64\\usr\\bin\\bash.exe",
+			"args": [
+				"-lc",
+				"g++ -fdiagnostics-color=always -g '${workspaceFolder:final-project-temperature-control-desktop-asm002}\\src\\pruebas.cpp' -o '${workspaceFolder:final-project-temperature-control-desktop-asm002}\\build\\pruebas.exe' $(fltk-config --cxxflags --ldflags)"
+			],
+			"options": {
+				"cwd": "${fileDirname}",
+				"env": {
+					"MSYSTEM": "UCRT64"
+				}
+			},
+			"problemMatcher": [
+				"$gcc"
+			],
+			"group": {
+				"kind": "build",
+				"isDefault": false
+			}
+		},
+		{
 			"label": "Build and Run C++ with FLTK",
 			"type": "process",
 			"command": "${workspaceFolder:final-project-temperature-control-desktop-asm002}\\build\\temperature-control-desktop.exe",
@@ -34,6 +57,18 @@
 			"group": {
 				"kind": "build",
 				"isDefault": true
+			}
+		},
+		{
+			"label": "Build and Run pruebas.exe",
+			"type": "process",
+			"command": "${workspaceFolder:final-project-temperature-control-desktop-asm002}\\build\\pruebas.exe",
+			"dependsOn": "Build C++ pruebas.cpp with FLTK",
+			"dependsOrder": "sequence",
+			"problemMatcher": [],
+			"group": {
+				"kind": "build",
+				"isDefault": false
 			}
 		}
 	]
