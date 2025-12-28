@@ -5,10 +5,13 @@
 #include <FL/Fl_Wizard.H>
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Output.H>
+#include <FL/fl_ask.H> 
 
 #include <windows.h>
 #include <vector>
 #include <string>
+
+#include <stdexcept>
 
 using namespace std;
 
@@ -43,6 +46,93 @@ std::vector<std::string> buscar_puertos_serie()
     return puertos;
 }
 
+class SerialPort
+{
+public:
+    SerialPort(const std::string &portName)
+    {
+        _serialHandle = CreateFileA(("\\\\.\\" + portName).c_str(), GENERIC_READ | GENERIC_WRITE, 0, NULL, OPEN_EXISTING, 0, NULL);
+
+        if (_serialHandle == INVALID_HANDLE_VALUE)
+        {
+            CloseHandle(_serialHandle);
+            throw std::runtime_error("No se pudo abrir el puerto serie.");
+        }
+
+        DCB serialParams{};
+        serialParams.BaudRate = CBR_9600;
+        serialParams.ByteSize = 8;
+        serialParams.StopBits = ONESTOPBIT;
+        serialParams.Parity = NOPARITY;
+        serialParams.DCBlength = sizeof(serialParams);
+
+        if (!SetCommState(_serialHandle, &serialParams))
+        {
+            CloseHandle(_serialHandle);
+            throw std::runtime_error("No se pudo configurar el puerto serie.");
+        }
+
+        COMMTIMEOUTS t{};
+        t.ReadIntervalTimeout = MAXDWORD;
+        t.ReadTotalTimeoutConstant = 0;
+        t.ReadTotalTimeoutMultiplier = 0;
+
+        if (!SetCommTimeouts(_serialHandle, &t))
+        {
+            CloseHandle(_serialHandle);
+            throw std::runtime_error("No se pudo configurar los timeouts del puerto serie.");
+        }
+    }
+
+    ~SerialPort()
+    {
+        CloseHandle(_serialHandle);
+    }
+
+    void send(int value)
+    {
+        std::string data = std::to_string(value) + "\n";
+        DWORD bytesWritten{0};
+
+        if (!WriteFile(_serialHandle, data.c_str(), data.size(), &bytesWritten, NULL))
+        {
+            CloseHandle(_serialHandle);
+            throw std::runtime_error("No se pudo enviar el brillo por el puerto serie.");
+        }
+    }
+
+    int read()
+    {
+        if (!ReadFile(_serialHandle, &_data, 1, &_bytesRead, NULL))
+        {
+            CloseHandle(_serialHandle);
+            throw std::runtime_error("No se pudo leer del puerto serie.");
+        }
+
+        if (_bytesRead > 0)
+        {
+            if (_data != '\n')
+            {
+                _buffer += _data;
+            }
+            else
+            {
+                int value = std::stoi(_buffer);
+                _buffer = "";
+                return value;
+            }
+        }
+
+        return -1;
+    }
+
+private:
+    HANDLE _serialHandle{nullptr};
+    char _data{' '};
+    DWORD _bytesRead{0};
+    std::string _buffer{""};
+};
+
 // =========================
 // CLASE PANTALLA BIENVENIDA
 // =========================
@@ -56,24 +146,29 @@ public:
     Fl_Button botonActualizar;
     Fl_Output textoCOM;
 
-    std::string puertoCOM;
+    Fl_Wizard *wizard;
+
+    string puertoCOM;
     vector<string> puertosGuardados;
 
     PantallaBienvenida(int w, int h, Fl_Wizard *wizard)
         : grupo(0, 0, w, h),
-          tituloBienvenida(0, h / 4, w, 40, "Bienvenido"),
+          tituloBienvenida(0, h / 4, w, 40, "Bienvenido {clases}"),
           botonConectar(0, 0, 0, 0, "Conectar"),
           desplegableCOM(0, 0, 0, 0, "Puerto serie:"),
           botonActualizar(0, 0, 0, 0, "Actualizar"),
-          textoCOM(200, 0, 100, 40, "COM ELEGIDO:")
+          textoCOM(200, 0, 100, 40, "COM ELEGIDO:"),
+          wizard(wizard)
     {
         // Posicionamiento
+        tituloBienvenida.labelsize(50);
+
         const int wBotonConectar = 200;
         const int hBotonConectar = 40;
         const int xBotonConectar = w / 2 - wBotonConectar / 2;
         const int yBotonConectar = h / 2;
         botonConectar.resize(xBotonConectar, yBotonConectar, wBotonConectar, hBotonConectar);
-        botonConectar.callback(botonConectar_cb, wizard);
+        botonConectar.callback(botonConectar_cb, this);
 
         const int wDesplegable = wBotonConectar / 2;
         const int hDesplegable = 25;
@@ -95,8 +190,17 @@ private:
     // Callback estático para botón Conectar
     static void botonConectar_cb(Fl_Widget *w, void *data)
     {
-        Fl_Wizard *wizard = static_cast<Fl_Wizard *>(data);
-        wizard->next();
+        PantallaBienvenida *p = static_cast<PantallaBienvenida *>(data);
+        try {
+        SerialPort puerto(p->puertoCOM);
+        p->wizard->next();
+        }
+        catch (const std::runtime_error &e) {
+            // fl_message("Error: %s", e.what()); // formato fprintf
+            string mensaje = string("Error: ") + e.what();
+            fl_message(mensaje.c_str());
+            
+        }
     }
 
     // Callback estático para desplegable
