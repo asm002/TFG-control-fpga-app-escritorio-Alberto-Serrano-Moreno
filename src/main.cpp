@@ -5,7 +5,7 @@
 #include <FL/Fl_Wizard.H>
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Output.H>
-#include <FL/fl_ask.H> 
+#include <FL/fl_ask.H>
 
 #include <windows.h>
 #include <vector>
@@ -13,10 +13,16 @@
 
 #include <stdexcept>
 
+#include <memory>
+
+#include <windows.h>
+
 using namespace std;
 
-string puertoCOM = "";
+string puertoString = "";
 vector<string> puertosGuardados; // seria mejor que en vez de global, fuese una variable en la misma clase que el desplegable de puertos
+class SerialPort;
+std::unique_ptr<SerialPort> puertoSerie; // puntero inteligente global para el objeto puerto serie, que se construye en el callback de boton conectar pero el objeto no vive en el ambito del callback (porque sino se destruiria al finalizar el callback)
 
 std::vector<std::string> buscar_puertos_serie()
 {
@@ -57,7 +63,7 @@ public:
 
         if (_serialHandle == INVALID_HANDLE_VALUE)
         {
-            CloseHandle(_serialHandle);
+            // CloseHandle(_serialHandle);   //no, segun chatgpt
             throw std::runtime_error("No se pudo abrir el puerto serie.");
         }
 
@@ -137,16 +143,26 @@ private:
 
 void botonConectar_callback(Fl_Widget *w, void *data)
 {
-    try {
-    SerialPort puerto(puertoCOM);
-    Fl_Wizard *wizard = static_cast<Fl_Wizard *>(data);
-    wizard->next();
+    if (puertoString == "")
+    {
+        // Sonido de error típico de Windows
+        MessageBeep(MB_ICONHAND); // Otros: MB_OK, MB_ICONQUESTION, MB_ICONEXCLAMATION
+        fl_message("Selecciona un puerto de la lista para conectar");
+        return;
     }
-    catch (const std::runtime_error &e) {
+
+    try
+    {
+        puertoSerie = make_unique<SerialPort>(puertoString); // construimos el objeto SerialPort a traves de su puntero inteligente, pasandole el string global
+        Fl_Wizard *wizard = static_cast<Fl_Wizard *>(data);
+        wizard->next();
+    }
+    catch (const std::runtime_error &e)
+    {
         // fl_message("Error: %s", e.what()); // formato fprintf
+        MessageBeep(MB_ICONEXCLAMATION);
         string mensaje = string("Error: ") + e.what();
         fl_message(mensaje.c_str());
-        
     }
 }
 
@@ -156,15 +172,14 @@ void desplegable_callback(Fl_Widget *w, void *data)
     Fl_Output *pTextoCOM = static_cast<Fl_Output *>(data); // pequeño texto para observar la variable global del puerto elegido
 
     int indice = pDesplegable->value();
-    if (indice == -1)
+    if (indice == -1) // nada seleccionado
     {
-        // Nada seleccionado
         return;
     }
 
     string puertoSeleccionado = pDesplegable->mvalue()->label(); // mvalue() devuelve el objeto menu item seleccionado. value() solo devuelve un entero del indice seleccionado
     pTextoCOM->value(puertoSeleccionado.c_str());
-    puertoCOM = puertoSeleccionado;
+    puertoString = puertoSeleccionado;
 }
 
 void botonActualizar_callback(Fl_Widget *w, void *data)
@@ -178,11 +193,12 @@ void botonActualizar_callback(Fl_Widget *w, void *data)
     }
     pDesplegable->value(-1);
     pDesplegable->redraw();
-    puertoCOM = "";
+    puertoString = "";
 }
 
 int main()
 {
+
     Fl_Window ventana(0, 0, 600, 338, "Control de temperatura - Alberto Serrano Moreno");
     Fl_Wizard wizard{0, 0, ventana.w(), ventana.h()};
 
@@ -221,6 +237,7 @@ int main()
     const int yBotonActualizar = yDesplegable;
     Fl_Button botonActualizar{xBotonActualizar, yBotonActualizar, wBotonActualizar, hBotonActualizar, "Actualizar"};
     botonActualizar.callback(botonActualizar_callback, &desplegableCOM);
+    botonActualizar_callback(&botonActualizar, &desplegableCOM); // llamada manual a la funcion de callback para que la aplicacion empiece con la lista cargada
 
     grupoBienvenida.end();
 
