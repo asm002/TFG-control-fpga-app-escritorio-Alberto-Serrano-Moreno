@@ -6,6 +6,7 @@
 #include <FL/Fl_Choice.H>
 #include <FL/Fl_Output.H>
 #include <FL/fl_ask.H>
+#include <FL/Fl_Hor_Value_Slider.H>
 
 #include <windows.h>
 #include <vector>
@@ -22,7 +23,7 @@ using namespace std;
 string puertoString = "";
 vector<string> puertosGuardados; // seria mejor que en vez de global, fuese una variable en la misma clase que el desplegable de puertos
 class SerialPort;
-std::unique_ptr<SerialPort> puertoSerie; // puntero inteligente global para el objeto puerto serie, que se construye en el callback de boton conectar pero el objeto no vive en el ambito del callback (porque sino se destruiria al finalizar el callback)
+std::unique_ptr<SerialPort> puertoSerie; // puntero inteligente global para el objeto puerto serie, que se construye en el callback de boton conectar pero el objeto no vive en el ambito del callback (porque sino, se destruiria al finalizar el callback)
 
 class SerialPort
 {
@@ -156,6 +157,8 @@ void botonConectar_callback(Fl_Widget *w, void *data)
         puertoSerie = make_unique<SerialPort>(puertoString); // construimos el objeto SerialPort a traves de su puntero inteligente, pasandole el string global
         Fl_Wizard *wizard = static_cast<Fl_Wizard *>(data);
         wizard->next();
+        // CREAMOS EL TITULO DE LA SIGUIENTE VENTANA
+
     }
     catch (const std::runtime_error &e)
     {
@@ -195,6 +198,66 @@ void botonActualizar_callback(Fl_Widget *w, void *data)
     pDesplegable->redraw();
     puertoString = "";
 }
+
+class pantallaPrincipal : public Fl_Group
+{
+
+    Fl_Window *ventana;
+    Fl_Wizard *wizard;
+
+    Fl_Box *titulo;
+    Fl_Button *botonVolver;
+    Fl_Hor_Value_Slider *sliderPWM;
+
+    static void botonVolver_callback(Fl_Widget *w, void *data){
+        pantallaPrincipal *p = static_cast<pantallaPrincipal *>(data);
+        puertoSerie.reset();  // destruye el SerialPort
+        p->wizard->prev();
+    }
+
+     static void sliderPWM_callback(Fl_Widget *w, void *data){
+        Fl_Hor_Value_Slider *pSlider = static_cast<Fl_Hor_Value_Slider *>(w);
+        SerialPort *pPuerto = static_cast<SerialPort *>(data);
+        int valorDelSlider = pSlider->value();
+        pPuerto->send(valorDelSlider);
+     }
+
+public:
+    pantallaPrincipal(Fl_Window *v, Fl_Wizard *w)
+        : ventana(v),
+          wizard(w),
+          Fl_Group(0, 0, v->w(), v->h())
+    {
+        // TITULO
+        const int xTitulo = 0;
+        const int yTitulo = 0;
+        const int wTitulo = ventana->w();
+        const int hTitulo = 40;
+        titulo = new Fl_Box{xTitulo, yTitulo, wTitulo, hTitulo, "Menú principal "}; // este label no se va a ver asi nunca, realmente tenemos que actualizar este label en el callback de botonConectar, cuando realmente ya hay un puertoString no vacio, no hay que olvidar que este codigo se ejecuta antes de llegar a fl_run y hayamos interactuado con la gui
+        titulo->labelsize(24);
+
+        // BOTON VOLVER (por ahora sirve para cambiar de puerto. Dara problemas en el futuro cuando haya mas cosas?)
+        const int wBotonVolver = 80;
+        const int hBotonVolver = 30;
+        const int xBotonVolver = 0;
+        const int yBotonVolver = 0;
+        botonVolver = new Fl_Button{xBotonVolver, yBotonVolver, wBotonVolver, hBotonVolver, "Volver"};
+        botonVolver->callback(botonVolver_callback, this);
+
+        // SLIDER LAZO ABIERTO
+        const int wSliderPWM = 200;
+        const int hSliderPWM = 50;
+        const int xSliderPWM = v->w()/2 - wSliderPWM/2;
+        const int ySliderPWM = v->h()/2 - hSliderPWM/2;
+        sliderPWM = new Fl_Hor_Value_Slider{xSliderPWM, ySliderPWM, wSliderPWM, hSliderPWM, "PWM"};
+        sliderPWM->bounds(0, 255);
+        sliderPWM->step(1);
+        //sliderPWM->value(0);
+        sliderPWM->type(FL_HOR_NICE_SLIDER);
+
+        this->end(); // viene de Fl_Group.end()
+    }
+};
 
 int main()
 {
@@ -244,13 +307,16 @@ int main()
     /* =======================
        PANTALLA(GRUPO) PRINCIPAL
        ======================= */
-    Fl_Group grupoPrincipal(0, 0, ventana.w(), ventana.h());
 
-    // TITULO
-    Fl_Box titulo(0, 0, ventana.w(), 40, "Control de temperatura STM32");
-    titulo.labelsize(24);
+    // Fl_Group grupoPrincipal(0, 0, ventana.w(), ventana.h());
 
-    grupoPrincipal.end();
+    // // TITULO
+    // Fl_Box titulo(0, 0, ventana.w(), 40, "Control de temperatura STM32");
+    // titulo.labelsize(24);
+
+    // grupoPrincipal.end();
+
+    pantallaPrincipal pPrincipal{&ventana, &wizard};
 
     wizard.end();
     ventana.end();
