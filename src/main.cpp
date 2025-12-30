@@ -23,7 +23,7 @@ using namespace std;
 string puertoString = "";
 vector<string> puertosGuardados; // seria mejor que en vez de global, fuese una variable en la misma clase que el desplegable de puertos
 class SerialPort;
-std::unique_ptr<SerialPort> puertoSerie; // puntero inteligente global para el objeto puerto serie, que se construye en el callback de boton conectar pero el objeto no vive en el ambito del callback (porque sino, se destruiria al finalizar el callback)
+std::unique_ptr<SerialPort> puertoSerie; // (NO ES UN PUNTERO, ES UN OBJETO QUE CONTIENE UN PUNTERO ENTRE OTRAS COSAS): puntero inteligente global para el objeto puerto serie, que se construye en el callback de boton conectar pero el objeto no vive en el ambito del callback (porque sino, se destruiria al finalizar el callback)
 
 class SerialPort
 {
@@ -158,7 +158,6 @@ void botonConectar_callback(Fl_Widget *w, void *data)
         Fl_Wizard *wizard = static_cast<Fl_Wizard *>(data);
         wizard->next();
         // CREAMOS EL TITULO DE LA SIGUIENTE VENTANA
-
     }
     catch (const std::runtime_error &e)
     {
@@ -209,18 +208,27 @@ class pantallaPrincipal : public Fl_Group
     Fl_Button *botonVolver;
     Fl_Hor_Value_Slider *sliderPWM;
 
-    static void botonVolver_callback(Fl_Widget *w, void *data){
+    static void botonVolver_callback(Fl_Widget *w, void *data)
+    {
         pantallaPrincipal *p = static_cast<pantallaPrincipal *>(data);
-        puertoSerie.reset();  // destruye el SerialPort
+        puertoSerie.reset(); // destruye el SerialPort
         p->wizard->prev();
     }
 
-     static void sliderPWM_callback(Fl_Widget *w, void *data){
+    static void sliderPWM_callback(Fl_Widget *w, void *data)
+    {
         Fl_Hor_Value_Slider *pSlider = static_cast<Fl_Hor_Value_Slider *>(w);
-        SerialPort *pPuerto = static_cast<SerialPort *>(data);
+        unique_ptr<SerialPort> *pInteligentePuerto = static_cast<unique_ptr<SerialPort> *>(data);
+        SerialPort *pPuerto = pInteligentePuerto->get();
         int valorDelSlider = pSlider->value();
+
+        if (!pInteligentePuerto || !pInteligentePuerto->get())
+        {
+            fl_message("Puerto no conectado");
+            return;
+        }
         pPuerto->send(valorDelSlider);
-     }
+    }
 
 public:
     pantallaPrincipal(Fl_Window *v, Fl_Wizard *w)
@@ -247,12 +255,13 @@ public:
         // SLIDER LAZO ABIERTO
         const int wSliderPWM = 200;
         const int hSliderPWM = 50;
-        const int xSliderPWM = v->w()/2 - wSliderPWM/2;
-        const int ySliderPWM = v->h()/2 - hSliderPWM/2;
+        const int xSliderPWM = v->w() / 2 - wSliderPWM / 2;
+        const int ySliderPWM = v->h() / 2 - hSliderPWM / 2;
         sliderPWM = new Fl_Hor_Value_Slider{xSliderPWM, ySliderPWM, wSliderPWM, hSliderPWM, "PWM"};
+        sliderPWM->callback(sliderPWM_callback, &puertoSerie);
         sliderPWM->bounds(0, 255);
         sliderPWM->step(1);
-        //sliderPWM->value(0);
+        // sliderPWM->value(0);
         sliderPWM->type(FL_HOR_NICE_SLIDER);
 
         this->end(); // viene de Fl_Group.end()
