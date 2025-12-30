@@ -24,36 +24,6 @@ vector<string> puertosGuardados; // seria mejor que en vez de global, fuese una 
 class SerialPort;
 std::unique_ptr<SerialPort> puertoSerie; // puntero inteligente global para el objeto puerto serie, que se construye en el callback de boton conectar pero el objeto no vive en el ambito del callback (porque sino se destruiria al finalizar el callback)
 
-std::vector<std::string> buscar_puertos_serie()
-{
-    std::vector<std::string> puertos;
-    HKEY hKey;
-    if (RegOpenKeyExA(HKEY_LOCAL_MACHINE,
-                      "HARDWARE\\DEVICEMAP\\SERIALCOMM",
-                      0, KEY_READ, &hKey) == ERROR_SUCCESS)
-    {
-        char valueName[256];
-        BYTE data[256];
-        DWORD valueNameSize, dataSize, type, index = 0;
-
-        while (true)
-        {
-            valueNameSize = sizeof(valueName);
-            dataSize = sizeof(data);
-            LONG ret = RegEnumValueA(hKey, index, valueName, &valueNameSize, nullptr, &type, data, &dataSize);
-            if (ret != ERROR_SUCCESS)
-                break;
-
-            if (type == REG_SZ)
-                puertos.push_back(std::string(reinterpret_cast<char *>(data)));
-
-            ++index;
-        }
-        RegCloseKey(hKey);
-    }
-    return puertos;
-}
-
 class SerialPort
 {
 public:
@@ -134,6 +104,36 @@ public:
         return -1;
     }
 
+    static std::vector<std::string> buscar_puertos_serie()
+    {
+        std::vector<std::string> puertos;
+        HKEY hKey;
+        if (RegOpenKeyExA(HKEY_LOCAL_MACHINE,
+                          "HARDWARE\\DEVICEMAP\\SERIALCOMM",
+                          0, KEY_READ, &hKey) == ERROR_SUCCESS)
+        {
+            char valueName[256];
+            BYTE data[256];
+            DWORD valueNameSize, dataSize, type, index = 0;
+
+            while (true)
+            {
+                valueNameSize = sizeof(valueName);
+                dataSize = sizeof(data);
+                LONG ret = RegEnumValueA(hKey, index, valueName, &valueNameSize, nullptr, &type, data, &dataSize);
+                if (ret != ERROR_SUCCESS)
+                    break;
+
+                if (type == REG_SZ)
+                    puertos.push_back(std::string(reinterpret_cast<char *>(data)));
+
+                ++index;
+            }
+            RegCloseKey(hKey);
+        }
+        return puertos;
+    }
+
 private:
     HANDLE _serialHandle{nullptr};
     char _data{' '};
@@ -186,7 +186,7 @@ void botonActualizar_callback(Fl_Widget *w, void *data)
 {
     Fl_Choice *pDesplegable = static_cast<Fl_Choice *>(data);
     pDesplegable->clear();
-    puertosGuardados = buscar_puertos_serie(); // puertosGuardados tiene que ser global porque el metodo add() recibe punteros de cada string en puertosGuardados. Al terminar la funcion callback, si puertosGuardados fuera local, se destruye la variable y los punteros apuntan a memoria rara (errores, comportamiento inesperado...)
+    puertosGuardados = SerialPort::buscar_puertos_serie(); // puertosGuardados tiene que ser global porque el metodo add() recibe punteros de cada string en puertosGuardados. Al terminar la funcion callback, si puertosGuardados fuera local, se destruye la variable y los punteros apuntan a memoria rara (errores, comportamiento inesperado...)
     for (const string &p : puertosGuardados)
     {
         pDesplegable->add(p.c_str());
