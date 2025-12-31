@@ -233,18 +233,19 @@ public:
     {
         // TITULO
         const int xTitulo = 0;
-        const int yTitulo = 0;
+        const int yTitulo = 10;
         const int wTitulo = ventana->w();
         const int hTitulo = 40;
-        titulo = new Fl_Box{xTitulo, yTitulo, wTitulo, hTitulo, "Menú principal "}; // este label no se va a ver asi nunca, realmente tenemos que actualizar este label en el callback de botonConectar, cuando realmente ya hay un puertoString no vacio, no hay que olvidar que este codigo se ejecuta antes de llegar a fl_run y hayamos interactuado con la gui
-        titulo->labelsize(24);
+        titulo = new Fl_Box{xTitulo, yTitulo, wTitulo, hTitulo, "PANEL DE CONTROL"};
+        titulo->labelsize(30);
 
         // BOTON VOLVER (por ahora sirve para cambiar de puerto. Dara problemas en el futuro cuando haya mas cosas?)
-        const int wBotonVolver = 80;
-        const int hBotonVolver = 30;
-        const int xBotonVolver = 0;
-        const int yBotonVolver = 0;
+        const int wBotonVolver = 100;
+        const int hBotonVolver = 40;
+        const int xBotonVolver = 0 + 10;
+        const int yBotonVolver = 0 + 10;
         botonVolver = new Fl_Button{xBotonVolver, yBotonVolver, wBotonVolver, hBotonVolver, "Volver"};
+        botonVolver->labelsize(20);
         botonVolver->callback(botonVolver_callback, this);
 
         // SLIDER LAZO ABIERTO
@@ -292,24 +293,27 @@ int main()
     Fl_Group grupoBienvenida(0, 0, ventana.w(), ventana.h());
 
     // TITULO
-    Fl_Box tituloBienvenida(0, ventana.h() / 4, ventana.w(), 40, "Bienvenido");
+    Fl_Box tituloBienvenida(0, ventana.h() / 4, ventana.w(), 40, "Control PID de temperatura");
     tituloBienvenida.labelsize(40);
 
     // BOTON CONECTAR
-    const int wBotonConectar = 200;
-    const int hBotonConectar = 40;
+    const int wBotonConectar = 300;
+    const int hBotonConectar = 60;
     const int xBotonConectar = ventana.w() / 2 - wBotonConectar / 2;
     const int yBotonConectar = ventana.h() / 2;
     Fl_Button botonConectar{xBotonConectar, yBotonConectar, wBotonConectar, hBotonConectar, "Conectar"};
+    botonConectar.labelsize(24);
     DataConectar dataConectar{&wizard, pPrincipal};
     botonConectar.callback(botonConectar_callback, &dataConectar);
 
     // DESPLEGABLE PUERTOS SERIE
     const int wDesplegable = wBotonConectar / 2;
-    const int hDesplegable = 25;
+    const int hDesplegable = 40;
     const int xDesplegable = xBotonConectar;
     const int yDesplegable = yBotonConectar + (hBotonConectar / 2) + hDesplegable;
     Fl_Choice desplegableCOM{xDesplegable, yDesplegable, wDesplegable, hDesplegable, "Puerto serie:"};
+    desplegableCOM.labelsize(20);
+    desplegableCOM.textsize(20);
     desplegableCOM.callback(desplegable_callback);
 
     // BOTON ACTUALIZAR PUERTOS SERIE DEL DESPLEGABLE
@@ -318,6 +322,7 @@ int main()
     const int xBotonActualizar = xDesplegable + wDesplegable;
     const int yBotonActualizar = yDesplegable;
     Fl_Button botonActualizar{xBotonActualizar, yBotonActualizar, wBotonActualizar, hBotonActualizar, "Actualizar"};
+    botonActualizar.labelsize(20);
     botonActualizar.callback(botonActualizar_callback, &desplegableCOM);
     botonActualizar_callback(&botonActualizar, &desplegableCOM); // llamada manual a la funcion de callback para que la aplicacion empiece con la lista cargada
 
