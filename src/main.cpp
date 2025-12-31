@@ -18,12 +18,35 @@
 
 #include <windows.h>
 
+#include <cmath>
+
 using namespace std;
 
+// FORWARD DECLARATIONS (para poder usar tipos de datos antes de definirlos)
+class SerialPort; // declaracion antes de definir la clase para poder definir el puntero inteligente de debajo
+class pantallaPrincipal;
+
+// VARIABLES GLOBALES
 string puertoString = "";
-vector<string> puertosGuardados; // seria mejor que en vez de global, fuese una variable en la misma clase que el desplegable de puertos
-class SerialPort;
+vector<string> puertosGuardados;         // seria mejor que en vez de global, fuese una variable en la misma clase que el desplegable de puertos
 std::unique_ptr<SerialPort> puertoSerie; // (NO ES UN PUNTERO, ES UN OBJETO QUE CONTIENE UN PUNTERO ENTRE OTRAS COSAS): puntero inteligente global para el objeto puerto serie, que se construye en el callback de boton conectar pero el objeto no vive en el ambito del callback (porque sino, se destruiria al finalizar el callback)
+
+// DECLARACIONES DE METODOS DISPONIBLES PARA TODAS LAS PANTALLAS
+
+/**
+ * Convierte el valor analógico raw de la STM32 a grados Celsius.
+ * @param adcValue Valor leído del ADC (0 - 4095 para 12 bits).
+ * @return Temperatura en grados Celsius.
+ */
+double calcularCelsius(int adcValue);
+
+// CLASES Y STRUCT
+
+struct DataConectar
+{
+    Fl_Wizard *pWizard;
+    pantallaPrincipal *pPrincipal;
+};
 
 class SerialPort
 {
@@ -39,7 +62,7 @@ public:
         }
 
         DCB serialParams{};
-        serialParams.BaudRate = CBR_9600;
+        serialParams.BaudRate = CBR_115200;
         serialParams.ByteSize = 8;
         serialParams.StopBits = ONESTOPBIT;
         serialParams.Parity = NOPARITY;
@@ -70,10 +93,10 @@ public:
 
     void send(int value)
     {
-        std::string data = std::to_string(value) + "\n";
-        DWORD bytesWritten{0};
+        std::string data = std::to_string(value) + "\n"; // mandamos una cadena de caracteres (string, formato ASCII) terminada en \n (delimitador). Por ejemplo: "123\n"
+        DWORD bytesWritten{0};                           // tipo de datos de windows (unsigned 32 bits). WriteFile escribre en esta variable cuantos bytes se han enviado
 
-        if (!WriteFile(_serialHandle, data.c_str(), data.size(), &bytesWritten, NULL))
+        if (!WriteFile(_serialHandle, data.c_str(), data.size(), &bytesWritten, NULL)) // aqui se produce el envio real. serialHandle representa al puerto abierto. NULL: operacion sincrona
         {
             CloseHandle(_serialHandle);
             throw std::runtime_error("No se pudo enviar el brillo por el puerto serie.");
@@ -82,27 +105,27 @@ public:
 
     int read()
     {
-        if (!ReadFile(_serialHandle, &_data, 1, &_bytesRead, NULL))
+        if (!ReadFile(_serialHandle, &_data, 1, &_bytesRead, NULL)) // aqui se produce la lectura de 1 byte.
         {
             CloseHandle(_serialHandle);
             throw std::runtime_error("No se pudo leer del puerto serie.");
         }
 
-        if (_bytesRead > 0)
+        if (_bytesRead > 0) // si se ha leido algo
         {
             if (_data != '\n')
             {
-                _buffer += _data;
+                _buffer += _data; // si lo leido no es el delimitador, lo guardas en el buffer
             }
-            else
+            else // si es el delimitador, no lo guardas y:
             {
-                int value = std::stoi(_buffer);
-                _buffer = "";
+                int value = std::stoi(_buffer); //  conviertes el buffer de cadena de caracteres (ascii) a int
+                _buffer = "";                   // limpieza del buffer para recibir el proximo dato
                 return value;
             }
         }
 
-        return -1;
+        return -1; // cuando se este cargando el buffer (dato incompleto) o cuando no se haya leido nada aun
     }
 
     static std::vector<std::string> buscar_puertos_serie()
@@ -142,87 +165,27 @@ private:
     std::string _buffer{""};
 };
 
-void botonConectar_callback(Fl_Widget *w, void *data)
-{
-    if (puertoString == "")
-    {
-        // Sonido de error típico de Windows
-        MessageBeep(MB_ICONHAND); // Otros: MB_OK, MB_ICONQUESTION, MB_ICONEXCLAMATION
-        fl_message("Selecciona un puerto de la lista para conectar");
-        return;
-    }
-
-    try
-    {
-        puertoSerie = make_unique<SerialPort>(puertoString); // construimos el objeto SerialPort a traves de su puntero inteligente, pasandole el string global
-        Fl_Wizard *wizard = static_cast<Fl_Wizard *>(data);
-        wizard->next();
-        // CREAMOS EL TITULO DE LA SIGUIENTE VENTANA
-    }
-    catch (const std::runtime_error &e)
-    {
-        // fl_message("Error: %s", e.what()); // formato fprintf
-        MessageBeep(MB_ICONEXCLAMATION);
-        string mensaje = string("Error: ") + e.what();
-        fl_message(mensaje.c_str());
-    }
-}
-
-void desplegable_callback(Fl_Widget *w, void *data)
-{
-    Fl_Choice *pDesplegable = static_cast<Fl_Choice *>(w);
-    Fl_Output *pTextoCOM = static_cast<Fl_Output *>(data); // pequeño texto para observar la variable global del puerto elegido
-
-    int indice = pDesplegable->value();
-    if (indice == -1) // nada seleccionado
-    {
-        return;
-    }
-
-    string puertoSeleccionado = pDesplegable->mvalue()->label(); // mvalue() devuelve el objeto menu item seleccionado. value() solo devuelve un entero del indice seleccionado
-    pTextoCOM->value(puertoSeleccionado.c_str());
-    puertoString = puertoSeleccionado;
-}
-
-void botonActualizar_callback(Fl_Widget *w, void *data)
-{
-    Fl_Choice *pDesplegable = static_cast<Fl_Choice *>(data);
-    pDesplegable->clear();
-    puertosGuardados = SerialPort::buscar_puertos_serie(); // puertosGuardados tiene que ser global porque el metodo add() recibe punteros de cada string en puertosGuardados. Al terminar la funcion callback, si puertosGuardados fuera local, se destruye la variable y los punteros apuntan a memoria rara (errores, comportamiento inesperado...)
-    for (const string &p : puertosGuardados)
-    {
-        pDesplegable->add(p.c_str());
-    }
-    pDesplegable->value(-1);
-    pDesplegable->redraw();
-    puertoString = "";
-}
-
 class pantallaPrincipal : public Fl_Group
 {
-
-    Fl_Window *ventana;
-    Fl_Wizard *wizard;
-
-    Fl_Box *titulo;
-    Fl_Button *botonVolver;
-    Fl_Hor_Value_Slider *sliderPWM;
-
+    // Todas las funciones de callback deben ser static, para ser funciones de clase y no de objeto, y no llevar implicitamente el puntero this al objeto propio, ya que la firma que acepta FLTK debe ser la que es y no llevar nada extra
     static void botonVolver_callback(Fl_Widget *w, void *data)
     {
-        pantallaPrincipal *p = static_cast<pantallaPrincipal *>(data);
+        pantallaPrincipal *self = static_cast<pantallaPrincipal *>(data);
         puertoSerie.reset(); // destruye el SerialPort
-        p->wizard->prev();
+        self->detener_lectura();    //  paramos el timer porque si no, sigue accediendo al timeout_callback y peta
+        self->wizard->prev();
     }
 
     static void sliderPWM_callback(Fl_Widget *w, void *data)
     {
         Fl_Hor_Value_Slider *pSlider = static_cast<Fl_Hor_Value_Slider *>(w);
-        unique_ptr<SerialPort> *pInteligentePuerto = static_cast<unique_ptr<SerialPort> *>(data);
-        SerialPort *pPuerto = pInteligentePuerto->get();
+
+        unique_ptr<SerialPort> *ppInteligentePuerto = static_cast<unique_ptr<SerialPort> *>(data); // hay que hacer esto porque es puntero a puntero (puntero a objeto puntero inteligente)
+        SerialPort *pPuerto = ppInteligentePuerto->get();
+
         int valorDelSlider = pSlider->value();
 
-        if (!pInteligentePuerto || !pInteligentePuerto->get())
+        if (!ppInteligentePuerto || !ppInteligentePuerto->get()) // por seguridad aunque creo que no hace falta
         {
             fl_message("Puerto no conectado");
             return;
@@ -230,7 +193,39 @@ class pantallaPrincipal : public Fl_Group
         pPuerto->send(valorDelSlider);
     }
 
+    static void timeout_callback(void *data)
+    {
+        pantallaPrincipal *self = static_cast<pantallaPrincipal *>(data); // es util usar la nomenclatura self cuando tienes un puntero que hace referencia a la misma clase en la que estas (como en python)
+
+        int lectura = puertoSerie->read(); // acceso a la variable global a traves del puntero inteligente (tiene un operador "->" que hace que se pueda acceder a él como si fuera un puntero)
+        if(lectura >= 0){  //esperar al dato completo para mostrarlo
+            //double tempCelsius = calcularCelsius(lectura);
+            self->textoTemperaturaDigital->value(to_string(lectura).c_str());
+        }
+        Fl::repeat_timeout(0.01, timeout_callback, data); // REPROGRAMAR TIMER
+    }
+
 public:
+    // uso atributos puntero para poder crear los objetos en el cuerpo del constructor (como me gusta mas a mi para tener encima las const int de dimensionado y tener todo junto)
+    // en consecuencia, tengo que usar "new", pero no tengo que preocuparme de "delete" porque FLTK gestiona automaticamente la destruccion de los hijos
+    Fl_Window *ventana;
+    Fl_Wizard *wizard;
+
+    Fl_Box *titulo;
+    Fl_Button *botonVolver;
+    Fl_Hor_Value_Slider *sliderPWM;
+    Fl_Output *textoTemperaturaDigital;
+
+    void activar_lectura()
+    { // funcion que no es estatica porque requiere de que haya un objeto instanciado (y ademas no requiere una firma concreta impuesta)
+        Fl::add_timeout(0.01, timeout_callback, this);
+    }
+
+    void detener_lectura()
+    {
+        Fl::remove_timeout(timeout_callback, this);
+    }
+
     pantallaPrincipal(Fl_Window *v, Fl_Wizard *w)
         : ventana(v),
           wizard(w),
@@ -254,25 +249,42 @@ public:
 
         // SLIDER LAZO ABIERTO
         const int wSliderPWM = 200;
-        const int hSliderPWM = 50;
+        const int hSliderPWM = 30;
         const int xSliderPWM = v->w() / 2 - wSliderPWM / 2;
         const int ySliderPWM = v->h() / 2 - hSliderPWM / 2;
         sliderPWM = new Fl_Hor_Value_Slider{xSliderPWM, ySliderPWM, wSliderPWM, hSliderPWM, "PWM"};
         sliderPWM->callback(sliderPWM_callback, &puertoSerie);
+        sliderPWM->labelsize(18);
+        sliderPWM->textsize(16);
         sliderPWM->bounds(0, 255);
         sliderPWM->step(1);
-        // sliderPWM->value(0);
         sliderPWM->type(FL_HOR_NICE_SLIDER);
 
+        // TEXTO DE TEMPERATURA DIGITAL LEIDA
+        const int wTextoTemperaturaDigital = 70;
+        const int hTextoTemperaturaDigital = 50;
+        const int xTextoTemperaturaDigital = v->w()/2 - wTextoTemperaturaDigital/2;
+        const int yTextoTemperaturaDigital = v->h() - hTextoTemperaturaDigital*(5/4.0);
+        textoTemperaturaDigital = new Fl_Output{xTextoTemperaturaDigital, yTextoTemperaturaDigital, wTextoTemperaturaDigital, hTextoTemperaturaDigital, "Temperatura digital"};
+        textoTemperaturaDigital->labelsize(18);
+        textoTemperaturaDigital->textsize(16);
         this->end(); // viene de Fl_Group.end()
     }
 };
 
+// Declaraciones de metodos de pantalla de bienvenida para poder definirlos despues de ambas pantallas y solucionar las dependencias circulares
+void botonConectar_callback(Fl_Widget *w, void *data);
+void desplegable_callback(Fl_Widget *w, void *data);
+void botonActualizar_callback(Fl_Widget *w, void *data);
+
+
 int main()
 {
 
-    Fl_Window ventana(0, 0, 600, 338, "Control de temperatura - Alberto Serrano Moreno");
-    Fl_Wizard wizard{0, 0, ventana.w(), ventana.h()};
+    Fl_Window ventana(0, 0, 1200, 676, "Control de temperatura - Alberto Serrano Moreno");
+    Fl_Wizard wizard{0, 0, ventana.w(), ventana.h()};   // widget invisible con el mismo tamaño que la ventana que nos sirve para iterar la visibilidad de sus grupos hijos
+
+    pantallaPrincipal *pPrincipal = nullptr; //  puntero vacio por ahora. Para poder pasar la direccion de principal antes de que el objeto haya sido creado
 
     /* =======================
        PANTALLA(GRUPO) BIENVENIDA
@@ -289,10 +301,8 @@ int main()
     const int xBotonConectar = ventana.w() / 2 - wBotonConectar / 2;
     const int yBotonConectar = ventana.h() / 2;
     Fl_Button botonConectar{xBotonConectar, yBotonConectar, wBotonConectar, hBotonConectar, "Conectar"};
-    botonConectar.callback(botonConectar_callback, &wizard);
-
-    // TEXTO PUERTO SERIE ELEGIDO (TEST)
-    Fl_Output textoCOM{200, 0, 100, 40, "COM ELEGIDO: "};
+    DataConectar dataConectar{&wizard, pPrincipal};
+    botonConectar.callback(botonConectar_callback, &dataConectar);
 
     // DESPLEGABLE PUERTOS SERIE
     const int wDesplegable = wBotonConectar / 2;
@@ -300,7 +310,7 @@ int main()
     const int xDesplegable = xBotonConectar;
     const int yDesplegable = yBotonConectar + (hBotonConectar / 2) + hDesplegable;
     Fl_Choice desplegableCOM{xDesplegable, yDesplegable, wDesplegable, hDesplegable, "Puerto serie:"};
-    desplegableCOM.callback(desplegable_callback, &textoCOM);
+    desplegableCOM.callback(desplegable_callback);
 
     // BOTON ACTUALIZAR PUERTOS SERIE DEL DESPLEGABLE
     const int wBotonActualizar = wBotonConectar / 2;
@@ -317,15 +327,8 @@ int main()
        PANTALLA(GRUPO) PRINCIPAL
        ======================= */
 
-    // Fl_Group grupoPrincipal(0, 0, ventana.w(), ventana.h());
-
-    // // TITULO
-    // Fl_Box titulo(0, 0, ventana.w(), 40, "Control de temperatura STM32");
-    // titulo.labelsize(24);
-
-    // grupoPrincipal.end();
-
-    pantallaPrincipal pPrincipal{&ventana, &wizard};
+    pantallaPrincipal principal{&ventana, &wizard};
+    dataConectar.pPrincipal = &principal; // una vez creada principal, pasamos su direccion a su puntero para poder usarse en el struct de conectar
 
     wizard.end();
     ventana.end();
@@ -333,5 +336,98 @@ int main()
     // wizard.value(&grupoPrincipal); // Página inicial
 
     ventana.show();
+
     return Fl::run();
+}
+
+// LOGICA (Funciones que solo hayan sido declaradas como prototipos y aun no definidas)
+
+void botonConectar_callback(Fl_Widget *w, void *data)
+{
+    if (puertoString == "")
+    {
+        // sonido de error tipico de windows
+        MessageBeep(MB_ICONHAND); // Otros: MB_OK, MB_ICONQUESTION, MB_ICONEXCLAMATION
+        fl_message("Selecciona un puerto de la lista para conectar");
+        return;
+    }
+
+    try
+    {
+        puertoSerie = make_unique<SerialPort>(puertoString); // construimos el objeto SerialPort a traves de su puntero inteligente, pasandole el string global
+        DataConectar *dataConectar = static_cast<DataConectar *>(data);
+        // Fl_Wizard *pWizard = dataConectar->pWizard;
+        // pantallaPrincipal *pPantallaPrincipal = dataConectar->pPrincipal;
+        dataConectar->pWizard->next();
+        // TIMER PERIODICO
+        dataConectar->pPrincipal->activar_lectura();
+    }
+    catch (const std::runtime_error &e)
+    {
+        // fl_message("Error: %s", e.what()); // formato fprintf
+        MessageBeep(MB_ICONEXCLAMATION);
+        string mensaje = string("Error: ") + e.what();
+        fl_message(mensaje.c_str());
+    }
+}
+
+void desplegable_callback(Fl_Widget *w, void *data)
+{
+    Fl_Choice *pDesplegable = static_cast<Fl_Choice *>(w);
+    //Fl_Output *pTextoCOM = static_cast<Fl_Output *>(data); // pequeño texto para observar la variable global del puerto elegido
+
+    int indice = pDesplegable->value();
+    if (indice == -1) // nada seleccionado
+    {
+        return;
+    }
+
+    string puertoSeleccionado = pDesplegable->mvalue()->label(); // mvalue() devuelve el objeto menu item seleccionado. value() solo devuelve un entero del indice seleccionado
+    //pTextoCOM->value(puertoSeleccionado.c_str());
+    puertoString = puertoSeleccionado;
+}
+
+void botonActualizar_callback(Fl_Widget *w, void *data)
+{
+    Fl_Choice *pDesplegable = static_cast<Fl_Choice *>(data);
+    pDesplegable->clear();
+    puertosGuardados = SerialPort::buscar_puertos_serie(); // puertosGuardados tiene que ser global porque el metodo add() recibe punteros de cada string en puertosGuardados. Al terminar la funcion callback, si puertosGuardados fuera local, se destruye la variable y los punteros apuntan a memoria rara (errores, comportamiento inesperado...)
+    for (const string &p : puertosGuardados)
+    {
+        pDesplegable->add(p.c_str());
+    }
+    pDesplegable->value(-1);
+    pDesplegable->redraw();
+    puertoString = "";
+}
+
+double calcularCelsius(int adcValue) {
+    // 1. Configuración del ADC (10 bits para STM32 en framework Arduino)
+    const double ADC_MAX = 1023.0; 
+    
+    // 2. Parámetros del hardware (Resistencia R3 en el esquemático)
+    const double RESISTENCIA_FIJA = 10000.0; // 10k Ohms
+    
+    // 3. Parámetros del NTC (según datasheet)
+    const double R0 = 10000.0;    // Resistencia a 25°C
+    const double T0 = 298.15;     // 25°C en Kelvin (273.15 + 25)
+    const double BETA = 3380.0;   // Constante B (25/50°C)
+
+    // Validación de seguridad para evitar divisiones por cero o logaritmos negativos
+    if (adcValue <= 0 || adcValue >= (int)ADC_MAX) {
+        return 0.0;
+    }
+
+    // --- CÁLCULO ---
+
+    // Paso A: Calcular la resistencia actual del termistor
+    // Según tu esquema: VCC -> NTC -> ADC -> R3 -> GND
+    double rNtc = RESISTENCIA_FIJA * (ADC_MAX / (double)adcValue - 1.0);
+
+    // Paso B: Aplicar la ecuación Beta (Variante de Steinhart-Hart)
+    double logR = std::log(rNtc / R0);
+    double temperaturaK = 1.0 / (1.0 / T0 + logR / BETA);
+
+    // Paso C: Convertir de Kelvin a Celsius
+    return temperaturaK - 273.15;
 }
