@@ -217,6 +217,7 @@ private:
         inputKi->activate();
         inputKd->activate();
         botonActualizarPID->activate();
+        sliderREF->activate();
     }
 
     void lazo_abierto()
@@ -227,6 +228,7 @@ private:
         inputKi->deactivate();
         inputKd->deactivate();
         botonActualizarPID->deactivate();
+        sliderREF->deactivate();
     }
 
     static void radio_callback(Fl_Widget *w, void *data)
@@ -266,6 +268,7 @@ public:
     Fl_Value_Input *inputKp;
     Fl_Value_Input *inputKi;
     Fl_Value_Input *inputKd;
+    Fl_Hor_Value_Slider *sliderREF;
     Fl_Button *botonActualizarPID;
 
     void activar_lectura()
@@ -276,6 +279,12 @@ public:
     void detener_lectura()
     {
         Fl::remove_timeout(timeout_callback, this);
+    }
+
+    void actualizar_titulo()
+    {
+        string nuevoTitulo = "MENÚ PRINCIPAL || Conectado a " + puertoString;
+        this->titulo->copy_label(nuevoTitulo.c_str());
     }
 
     pantallaPrincipal(Fl_Window *v, Fl_Wizard *w)
@@ -405,8 +414,22 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
     inputKd->value(0.0);
     inputKd->step(0.1);
 
-    // BOTON ACTUALIZAR PID
     yElementosPanel += 50;
+    sliderREF = new Fl_Hor_Value_Slider{xElementosPanel,
+                                        yElementosPanel,
+                                        wElementosPanel,
+                                        30,
+                                        "Consigna (digital)"
+    };
+    sliderREF->labelsize(18);
+    sliderREF->textsize(16);
+    sliderREF->bounds(500, 1000);
+    sliderREF->step(1);
+    sliderREF->value(500);
+    sliderREF->type(FL_HOR_NICE_SLIDER);
+
+    // BOTON ACTUALIZAR PID
+    yElementosPanel += 70;
     botonActualizarPID = new Fl_Button{xElementosPanel,
                                        yElementosPanel,
                                        wElementosPanel,
@@ -508,8 +531,9 @@ void botonConectar_callback(Fl_Widget *w, void *data)
         puertoSerie = make_unique<SerialPort>(puertoString); // construimos el objeto SerialPort a traves de su puntero inteligente, pasandole el string global
         DataConectar *dataConectar = static_cast<DataConectar *>(data);
         dataConectar->pWizard->next();
-        // TIMER PERIODICO
+        // COMUNICACIONES CON LA PANTALLA PRINCIPAL
         dataConectar->pPrincipal->activar_lectura();
+        dataConectar->pPrincipal->actualizar_titulo();
     }
     catch (const std::runtime_error &e)
     {
