@@ -7,6 +7,9 @@
 #include <FL/Fl_Output.H>
 #include <FL/fl_ask.H>
 #include <FL/Fl_Hor_Value_Slider.H>
+#include <FL/Fl_Value_Input.H>
+#include <FL/Fl_Round_Button.H>
+#include <FL/Fl_Pack.H>
 
 #include <windows.h>
 #include <vector>
@@ -171,8 +174,8 @@ class pantallaPrincipal : public Fl_Group
     static void botonVolver_callback(Fl_Widget *w, void *data)
     {
         pantallaPrincipal *self = static_cast<pantallaPrincipal *>(data);
-        puertoSerie.reset(); // destruye el SerialPort
-        self->detener_lectura();    //  paramos el timer porque si no, sigue accediendo al timeout_callback y peta
+        puertoSerie.reset();     // destruye el SerialPort
+        self->detener_lectura(); //  paramos el timer porque si no, sigue accediendo al timeout_callback y peta
         self->wizard->prev();
     }
 
@@ -198,11 +201,46 @@ class pantallaPrincipal : public Fl_Group
         pantallaPrincipal *self = static_cast<pantallaPrincipal *>(data); // es util usar la nomenclatura self cuando tienes un puntero que hace referencia a la misma clase en la que estas (como en python)
 
         int lectura = puertoSerie->read(); // acceso a la variable global a traves del puntero inteligente (tiene un operador "->" que hace que se pueda acceder a él como si fuera un puntero)
-        if(lectura >= 0){  //esperar al dato completo para mostrarlo
-            //double tempCelsius = calcularCelsius(lectura);
+        if (lectura >= 0)
+        { // esperar al dato completo para mostrarlo
+            // double tempCelsius = calcularCelsius(lectura);
             self->textoTemperaturaDigital->value(to_string(lectura).c_str());
         }
         Fl::repeat_timeout(0.01, timeout_callback, data); // REPROGRAMAR TIMER
+    }
+
+    void lazo_cerrado()
+    {
+        sliderPWM->deactivate();
+        inputKp->activate();
+        inputKi->activate();
+        inputKd->activate();
+        botonActualizarPID->activate();
+    }
+
+    void lazo_abierto()
+    {
+        sliderPWM->activate();
+        inputKp->deactivate();
+        inputKi->deactivate();
+        inputKd->deactivate();
+        botonActualizarPID->deactivate();
+    }
+
+    static void radio_callback(Fl_Widget *w, void *data)
+    {
+        pantallaPrincipal *self = static_cast<pantallaPrincipal *>(data);
+        Fl_Round_Button *rb = static_cast<Fl_Round_Button *>(w);
+        if (self->rbLazoCerrado->value() == 1)
+        {
+            // LAZO CERRADO
+            self->lazo_cerrado();
+        }
+        else
+        {
+            // LAZO ABIERTO
+            self->lazo_abierto();
+        }
     }
 
 public:
@@ -213,8 +251,18 @@ public:
 
     Fl_Box *titulo;
     Fl_Button *botonVolver;
-    Fl_Hor_Value_Slider *sliderPWM;
+
     Fl_Output *textoTemperaturaDigital;
+
+    Fl_Group *panelControl;
+    Fl_Box *tituloPanel;
+    Fl_Round_Button *rbLazoCerrado;
+    Fl_Round_Button *rbLazoAbierto;
+    Fl_Hor_Value_Slider *sliderPWM;
+    Fl_Value_Input *inputKp;
+    Fl_Value_Input *inputKi;
+    Fl_Value_Input *inputKd;
+    Fl_Button *botonActualizarPID;
 
     void activar_lectura()
     { // funcion que no es estatica porque requiere de que haya un objeto instanciado (y ademas no requiere una firma concreta impuesta)
@@ -236,39 +284,142 @@ public:
         const int yTitulo = 10;
         const int wTitulo = ventana->w();
         const int hTitulo = 40;
-        titulo = new Fl_Box{xTitulo, yTitulo, wTitulo, hTitulo, "PANEL DE CONTROL"};
+        titulo = new Fl_Box{xTitulo, yTitulo, wTitulo, hTitulo, "MENÚ PRINCIPAL"};
         titulo->labelsize(30);
+        titulo->labelfont(FL_BOLD);
 
         // BOTON VOLVER (por ahora sirve para cambiar de puerto. Dara problemas en el futuro cuando haya mas cosas?)
         const int wBotonVolver = 100;
         const int hBotonVolver = 40;
-        const int xBotonVolver = 0 + 10;
-        const int yBotonVolver = 0 + 10;
+        const int xBotonVolver = 15;
+        const int yBotonVolver = 15;
         botonVolver = new Fl_Button{xBotonVolver, yBotonVolver, wBotonVolver, hBotonVolver, "Volver"};
         botonVolver->labelsize(20);
+        botonVolver->labelfont(FL_BOLD);
         botonVolver->callback(botonVolver_callback, this);
 
-        // SLIDER LAZO ABIERTO
-        const int wSliderPWM = 200;
-        const int hSliderPWM = 30;
-        const int xSliderPWM = v->w() / 2 - wSliderPWM / 2;
-        const int ySliderPWM = v->h() / 2 - hSliderPWM / 2;
-        sliderPWM = new Fl_Hor_Value_Slider{xSliderPWM, ySliderPWM, wSliderPWM, hSliderPWM, "PWM"};
+        // --- PANEL DE CONTROL ---
+        const int wPanel = 300;
+        const int hPanel = v->h() - 2 * (yBotonVolver + hBotonVolver + 30);
+        const int xPanel = xBotonVolver;
+        const int yPanel = yBotonVolver + hBotonVolver + 30;
+        const int margenPanel = 10;
+        panelControl = new Fl_Group{xPanel, yPanel, wPanel, hPanel};
+        panelControl->box(FL_THIN_UP_BOX);
+
+        // // Pack principal (columna)
+        // packMain = new Fl_Pack{
+        // panelControl->x() + margenPanel,
+        // panelControl->y() + margenPanel,
+        // panelControl->w() - 2*margenPanel,
+        // panelControl->h() - 2*margenPanel
+        // };
+        // packMain->type(Fl_Pack::VERTICAL);
+        // packMain->spacing(12);
+
+        // Todo lo del panel debe tener el mismo ancho y margen. Tambien misma x. La y es lo que se va incrementando.
+        const int xElementosPanel = xPanel + margenPanel;
+        int yElementosPanel = yPanel + margenPanel;
+        const int wElementosPanel = wPanel - 2 * margenPanel;
+        // Titulo del panel de control
+        tituloPanel = new Fl_Box(xElementosPanel,
+                                 yElementosPanel,
+                                 wElementosPanel,
+                                 30,
+                                 "Panel de control");
+        tituloPanel->labelsize(20);
+        tituloPanel->labelfont(FL_BOLD);
+        tituloPanel->align(FL_ALIGN_CENTER);
+
+        // SELECTORES DE LAZO ABIERTO/CERRADO (POR DEFECTO EMPIEZA EN LAZO ABIERTO)
+        yElementosPanel += 50;
+        rbLazoAbierto = new Fl_Round_Button{xElementosPanel,
+                                            yElementosPanel,
+                                            wElementosPanel,
+                                            30,
+                                            "Control manual (lazo abierto)"};
+        rbLazoAbierto->type(FL_RADIO_BUTTON);
+        rbLazoAbierto->callback(radio_callback, this);
+        rbLazoAbierto->value(1); // por defecto comienza encendido. Por tanto, el otro radio button comienza apagado (por pertenecer ambos al mismo grupo)
+
+        yElementosPanel += 25;
+        rbLazoCerrado = new Fl_Round_Button{xElementosPanel,
+                                            yElementosPanel,
+                                            wElementosPanel,
+                                            30,
+                                            "Control automático (lazo cerrado)"};
+        rbLazoCerrado->type(FL_RADIO_BUTTON);
+        rbLazoCerrado->callback(radio_callback, this);
+
+        // SLIDER PWM LAZO ABIERTO
+        yElementosPanel += 50;
+        sliderPWM = new Fl_Hor_Value_Slider{xElementosPanel,
+                                            yElementosPanel,
+                                            wElementosPanel,
+                                            30,
+                                            "PWM"};
         sliderPWM->callback(sliderPWM_callback, &puertoSerie);
         sliderPWM->labelsize(18);
         sliderPWM->textsize(16);
         sliderPWM->bounds(0, 255);
         sliderPWM->step(1);
         sliderPWM->type(FL_HOR_NICE_SLIDER);
+        sliderPWM->activate();
+
+        // PARAMETROS PID LAZO CERRADO
+        yElementosPanel += 70;
+        inputKp = new Fl_Value_Input{xElementosPanel+25,
+                                     yElementosPanel,
+                                     wElementosPanel-50,
+                                     30,
+                                     "Kp:"};
+        yElementosPanel += 50;
+        inputKi = new Fl_Value_Input{xElementosPanel+25,
+                                     yElementosPanel,
+                                     wElementosPanel-50,
+                                     30,
+                                     "Ki:"};
+        yElementosPanel += 50;
+        inputKd = new Fl_Value_Input{xElementosPanel+25,
+                                     yElementosPanel,
+                                     wElementosPanel-50,
+                                     30,
+                                     "Kd:"};
+
+        inputKp->deactivate();
+        inputKi->deactivate();
+        inputKd->deactivate();
+
+        inputKp->value(10.0);
+        inputKp->step(0.1);
+
+        inputKi->value(0.5);
+        inputKi->step(0.01);
+
+        inputKd->value(0.0);
+        inputKd->step(0.1);
+
+        // BOTON ACTUALIZAR PID
+        yElementosPanel += 50;
+        botonActualizarPID = new Fl_Button{xElementosPanel,
+                                     yElementosPanel,
+                                     wElementosPanel,
+                                     30,
+                                     "Actualizar PID"};
+        botonActualizarPID->deactivate();
+
+        // packMain->end();
+        panelControl->end();
 
         // TEXTO DE TEMPERATURA DIGITAL LEIDA
         const int wTextoTemperaturaDigital = 70;
         const int hTextoTemperaturaDigital = 50;
-        const int xTextoTemperaturaDigital = v->w()/2 - wTextoTemperaturaDigital/2;
-        const int yTextoTemperaturaDigital = v->h() - hTextoTemperaturaDigital*(5/4.0);
+        const int xTextoTemperaturaDigital = v->w() / 2 - wTextoTemperaturaDigital / 2;
+        const int yTextoTemperaturaDigital = v->h() - hTextoTemperaturaDigital * (5 / 4.0);
         textoTemperaturaDigital = new Fl_Output{xTextoTemperaturaDigital, yTextoTemperaturaDigital, wTextoTemperaturaDigital, hTextoTemperaturaDigital, "Temperatura digital"};
         textoTemperaturaDigital->labelsize(18);
         textoTemperaturaDigital->textsize(16);
+
         this->end(); // viene de Fl_Group.end()
     }
 };
@@ -278,12 +429,11 @@ void botonConectar_callback(Fl_Widget *w, void *data);
 void desplegable_callback(Fl_Widget *w, void *data);
 void botonActualizar_callback(Fl_Widget *w, void *data);
 
-
 int main()
 {
 
     Fl_Window ventana(0, 0, 1200, 676, "Control de temperatura - Alberto Serrano Moreno");
-    Fl_Wizard wizard{0, 0, ventana.w(), ventana.h()};   // widget invisible con el mismo tamaño que la ventana que nos sirve para iterar la visibilidad de sus grupos hijos
+    Fl_Wizard wizard{0, 0, ventana.w(), ventana.h()}; // widget invisible con el mismo tamaño que la ventana que nos sirve para iterar la visibilidad de sus grupos hijos
 
     pantallaPrincipal *pPrincipal = nullptr; //  puntero vacio por ahora. Para poder pasar la direccion de principal antes de que el objeto haya sido creado
 
@@ -295,6 +445,7 @@ int main()
     // TITULO
     Fl_Box tituloBienvenida(0, ventana.h() / 4, ventana.w(), 40, "Control PID de temperatura");
     tituloBienvenida.labelsize(40);
+    tituloBienvenida.labelfont(FL_BOLD);
 
     // BOTON CONECTAR
     const int wBotonConectar = 300;
@@ -303,6 +454,7 @@ int main()
     const int yBotonConectar = ventana.h() / 2;
     Fl_Button botonConectar{xBotonConectar, yBotonConectar, wBotonConectar, hBotonConectar, "Conectar"};
     botonConectar.labelsize(24);
+    botonConectar.labelfont(FL_BOLD);
     DataConectar dataConectar{&wizard, pPrincipal};
     botonConectar.callback(botonConectar_callback, &dataConectar);
 
@@ -315,6 +467,7 @@ int main()
     desplegableCOM.labelsize(20);
     desplegableCOM.textsize(20);
     desplegableCOM.callback(desplegable_callback);
+    desplegableCOM.align(FL_ALIGN_BOTTOM);
 
     // BOTON ACTUALIZAR PUERTOS SERIE DEL DESPLEGABLE
     const int wBotonActualizar = wBotonConectar / 2;
@@ -361,8 +514,6 @@ void botonConectar_callback(Fl_Widget *w, void *data)
     {
         puertoSerie = make_unique<SerialPort>(puertoString); // construimos el objeto SerialPort a traves de su puntero inteligente, pasandole el string global
         DataConectar *dataConectar = static_cast<DataConectar *>(data);
-        // Fl_Wizard *pWizard = dataConectar->pWizard;
-        // pantallaPrincipal *pPantallaPrincipal = dataConectar->pPrincipal;
         dataConectar->pWizard->next();
         // TIMER PERIODICO
         dataConectar->pPrincipal->activar_lectura();
@@ -379,7 +530,7 @@ void botonConectar_callback(Fl_Widget *w, void *data)
 void desplegable_callback(Fl_Widget *w, void *data)
 {
     Fl_Choice *pDesplegable = static_cast<Fl_Choice *>(w);
-    //Fl_Output *pTextoCOM = static_cast<Fl_Output *>(data); // pequeño texto para observar la variable global del puerto elegido
+    // Fl_Output *pTextoCOM = static_cast<Fl_Output *>(data); // pequeño texto para observar la variable global del puerto elegido
 
     int indice = pDesplegable->value();
     if (indice == -1) // nada seleccionado
@@ -388,7 +539,7 @@ void desplegable_callback(Fl_Widget *w, void *data)
     }
 
     string puertoSeleccionado = pDesplegable->mvalue()->label(); // mvalue() devuelve el objeto menu item seleccionado. value() solo devuelve un entero del indice seleccionado
-    //pTextoCOM->value(puertoSeleccionado.c_str());
+    // pTextoCOM->value(puertoSeleccionado.c_str());
     puertoString = puertoSeleccionado;
 }
 
@@ -406,20 +557,22 @@ void botonActualizar_callback(Fl_Widget *w, void *data)
     puertoString = "";
 }
 
-double calcularCelsius(int adcValue) {
+double calcularCelsius(int adcValue)
+{
     // 1. Configuración del ADC (10 bits para STM32 en framework Arduino)
-    const double ADC_MAX = 1023.0; 
-    
+    const double ADC_MAX = 1023.0;
+
     // 2. Parámetros del hardware (Resistencia R3 en el esquemático)
     const double RESISTENCIA_FIJA = 10000.0; // 10k Ohms
-    
+
     // 3. Parámetros del NTC (según datasheet)
-    const double R0 = 10000.0;    // Resistencia a 25°C
-    const double T0 = 298.15;     // 25°C en Kelvin (273.15 + 25)
-    const double BETA = 3380.0;   // Constante B (25/50°C)
+    const double R0 = 10000.0;  // Resistencia a 25°C
+    const double T0 = 298.15;   // 25°C en Kelvin (273.15 + 25)
+    const double BETA = 3380.0; // Constante B (25/50°C)
 
     // Validación de seguridad para evitar divisiones por cero o logaritmos negativos
-    if (adcValue <= 0 || adcValue >= (int)ADC_MAX) {
+    if (adcValue <= 0 || adcValue >= (int)ADC_MAX)
+    {
         return 0.0;
     }
 
