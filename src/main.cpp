@@ -170,6 +170,7 @@ private:
 
 class pantallaPrincipal : public Fl_Group
 {
+private:
     // Todas las funciones de callback deben ser static, para ser funciones de clase y no de objeto, y no llevar implicitamente el puntero this al objeto propio, ya que la firma que acepta FLTK debe ser la que es y no llevar nada extra
     static void botonVolver_callback(Fl_Widget *w, void *data)
     {
@@ -220,6 +221,7 @@ class pantallaPrincipal : public Fl_Group
 
     void lazo_abierto()
     {
+        rbLazoAbierto->value(1); // por defecto comienza encendido. Por tanto, el otro radio button comienza apagado (por pertenecer ambos al mismo grupo)
         sliderPWM->activate();
         inputKp->deactivate();
         inputKi->deactivate();
@@ -242,6 +244,8 @@ class pantallaPrincipal : public Fl_Group
             self->lazo_abierto();
         }
     }
+
+    void configurarPanelControl(const int wPanel, const int hPanel, const int xPanel, const int yPanel, const int margenPanel); // prototipo
 
 public:
     // uso atributos puntero para poder crear los objetos en el cuerpo del constructor (como me gusta mas a mi para tener encima las const int de dimensionado y tener todo junto)
@@ -298,118 +302,11 @@ public:
         botonVolver->labelfont(FL_BOLD);
         botonVolver->callback(botonVolver_callback, this);
 
-        // --- PANEL DE CONTROL ---
-        const int wPanel = 300;
-        const int hPanel = v->h() - 2 * (yBotonVolver + hBotonVolver + 30);
-        const int xPanel = xBotonVolver;
-        const int yPanel = yBotonVolver + hBotonVolver + 30;
-        const int margenPanel = 10;
-        panelControl = new Fl_Group{xPanel, yPanel, wPanel, hPanel};
-        panelControl->box(FL_THIN_UP_BOX);
-
-        // // Pack principal (columna)
-        // packMain = new Fl_Pack{
-        // panelControl->x() + margenPanel,
-        // panelControl->y() + margenPanel,
-        // panelControl->w() - 2*margenPanel,
-        // panelControl->h() - 2*margenPanel
-        // };
-        // packMain->type(Fl_Pack::VERTICAL);
-        // packMain->spacing(12);
-
-        // Todo lo del panel debe tener el mismo ancho y margen. Tambien misma x. La y es lo que se va incrementando.
-        const int xElementosPanel = xPanel + margenPanel;
-        int yElementosPanel = yPanel + margenPanel;
-        const int wElementosPanel = wPanel - 2 * margenPanel;
-        // Titulo del panel de control
-        tituloPanel = new Fl_Box(xElementosPanel,
-                                 yElementosPanel,
-                                 wElementosPanel,
-                                 30,
-                                 "Panel de control");
-        tituloPanel->labelsize(20);
-        tituloPanel->labelfont(FL_BOLD);
-        tituloPanel->align(FL_ALIGN_CENTER);
-
-        // SELECTORES DE LAZO ABIERTO/CERRADO (POR DEFECTO EMPIEZA EN LAZO ABIERTO)
-        yElementosPanel += 50;
-        rbLazoAbierto = new Fl_Round_Button{xElementosPanel,
-                                            yElementosPanel,
-                                            wElementosPanel,
-                                            30,
-                                            "Control manual (lazo abierto)"};
-        rbLazoAbierto->type(FL_RADIO_BUTTON);
-        rbLazoAbierto->callback(radio_callback, this);
-        rbLazoAbierto->value(1); // por defecto comienza encendido. Por tanto, el otro radio button comienza apagado (por pertenecer ambos al mismo grupo)
-
-        yElementosPanel += 25;
-        rbLazoCerrado = new Fl_Round_Button{xElementosPanel,
-                                            yElementosPanel,
-                                            wElementosPanel,
-                                            30,
-                                            "Control automático (lazo cerrado)"};
-        rbLazoCerrado->type(FL_RADIO_BUTTON);
-        rbLazoCerrado->callback(radio_callback, this);
-
-        // SLIDER PWM LAZO ABIERTO
-        yElementosPanel += 50;
-        sliderPWM = new Fl_Hor_Value_Slider{xElementosPanel,
-                                            yElementosPanel,
-                                            wElementosPanel,
-                                            30,
-                                            "PWM"};
-        sliderPWM->callback(sliderPWM_callback, &puertoSerie);
-        sliderPWM->labelsize(18);
-        sliderPWM->textsize(16);
-        sliderPWM->bounds(0, 255);
-        sliderPWM->step(1);
-        sliderPWM->type(FL_HOR_NICE_SLIDER);
-        sliderPWM->activate();
-
-        // PARAMETROS PID LAZO CERRADO
-        yElementosPanel += 70;
-        inputKp = new Fl_Value_Input{xElementosPanel+25,
-                                     yElementosPanel,
-                                     wElementosPanel-50,
-                                     30,
-                                     "Kp:"};
-        yElementosPanel += 50;
-        inputKi = new Fl_Value_Input{xElementosPanel+25,
-                                     yElementosPanel,
-                                     wElementosPanel-50,
-                                     30,
-                                     "Ki:"};
-        yElementosPanel += 50;
-        inputKd = new Fl_Value_Input{xElementosPanel+25,
-                                     yElementosPanel,
-                                     wElementosPanel-50,
-                                     30,
-                                     "Kd:"};
-
-        inputKp->deactivate();
-        inputKi->deactivate();
-        inputKd->deactivate();
-
-        inputKp->value(10.0);
-        inputKp->step(0.1);
-
-        inputKi->value(0.5);
-        inputKi->step(0.01);
-
-        inputKd->value(0.0);
-        inputKd->step(0.1);
-
-        // BOTON ACTUALIZAR PID
-        yElementosPanel += 50;
-        botonActualizarPID = new Fl_Button{xElementosPanel,
-                                     yElementosPanel,
-                                     wElementosPanel,
-                                     30,
-                                     "Actualizar PID"};
-        botonActualizarPID->deactivate();
-
-        // packMain->end();
-        panelControl->end();
+        configurarPanelControl(300,
+                               v->h() - 2 * (yBotonVolver + hBotonVolver + 30),
+                               xBotonVolver,
+                               yBotonVolver + hBotonVolver + 30,
+                               10);
 
         // TEXTO DE TEMPERATURA DIGITAL LEIDA
         const int wTextoTemperaturaDigital = 70;
@@ -423,6 +320,102 @@ public:
         this->end(); // viene de Fl_Group.end()
     }
 };
+
+// DEFINICIONES DE PROTOTIPOS DE CLASE
+void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPanel, const int xPanel, const int yPanel, const int margenPanel)
+{
+    // --- PANEL DE CONTROL ---
+    panelControl = new Fl_Group{xPanel, yPanel, wPanel, hPanel};
+    panelControl->box(FL_THIN_UP_BOX);
+
+    // Todo lo del panel debe tener el mismo ancho y margen. Tambien misma x. La y es lo que se va incrementando.
+    const int xElementosPanel = xPanel + margenPanel;
+    int yElementosPanel = yPanel + margenPanel;
+    const int wElementosPanel = wPanel - 2 * margenPanel;
+
+    // Titulo del panel de control
+    tituloPanel = new Fl_Box(xElementosPanel,
+                             yElementosPanel,
+                             wElementosPanel,
+                             30,
+                             "Panel de control");
+    tituloPanel->labelsize(20);
+    tituloPanel->labelfont(FL_BOLD);
+    tituloPanel->align(FL_ALIGN_CENTER);
+
+    // SELECTORES DE LAZO ABIERTO/CERRADO (POR DEFECTO EMPIEZA EN LAZO ABIERTO)
+    yElementosPanel += 50;
+    rbLazoAbierto = new Fl_Round_Button{xElementosPanel,
+                                        yElementosPanel,
+                                        wElementosPanel,
+                                        30,
+                                        "Control manual (lazo abierto)"};
+    rbLazoAbierto->type(FL_RADIO_BUTTON);
+    rbLazoAbierto->callback(radio_callback, this);
+
+    yElementosPanel += 25;
+    rbLazoCerrado = new Fl_Round_Button{xElementosPanel,
+                                        yElementosPanel,
+                                        wElementosPanel,
+                                        30,
+                                        "Control automático (lazo cerrado)"};
+    rbLazoCerrado->type(FL_RADIO_BUTTON);
+    rbLazoCerrado->callback(radio_callback, this);
+
+    // SLIDER PWM LAZO ABIERTO
+    yElementosPanel += 50;
+    sliderPWM = new Fl_Hor_Value_Slider{xElementosPanel,
+                                        yElementosPanel,
+                                        wElementosPanel,
+                                        30,
+                                        "PWM"};
+    sliderPWM->callback(sliderPWM_callback, &puertoSerie);
+    sliderPWM->labelsize(18);
+    sliderPWM->textsize(16);
+    sliderPWM->bounds(0, 255);
+    sliderPWM->step(1);
+    sliderPWM->type(FL_HOR_NICE_SLIDER);
+
+    // PARAMETROS PID LAZO CERRADO
+    yElementosPanel += 70;
+    inputKp = new Fl_Value_Input{xElementosPanel + 25,
+                                 yElementosPanel,
+                                 wElementosPanel - 50,
+                                 30,
+                                 "Kp:"};
+    yElementosPanel += 50;
+    inputKi = new Fl_Value_Input{xElementosPanel + 25,
+                                 yElementosPanel,
+                                 wElementosPanel - 50,
+                                 30,
+                                 "Ki:"};
+    yElementosPanel += 50;
+    inputKd = new Fl_Value_Input{xElementosPanel + 25,
+                                 yElementosPanel,
+                                 wElementosPanel - 50,
+                                 30,
+                                 "Kd:"};
+
+    inputKp->value(10.0);
+    inputKp->step(0.1);
+
+    inputKi->value(0.5);
+    inputKi->step(0.01);
+
+    inputKd->value(0.0);
+    inputKd->step(0.1);
+
+    // BOTON ACTUALIZAR PID
+    yElementosPanel += 50;
+    botonActualizarPID = new Fl_Button{xElementosPanel,
+                                       yElementosPanel,
+                                       wElementosPanel,
+                                       30,
+                                       "Actualizar PID"};
+
+    lazo_abierto(); // Comenzamos en lazo abierto por defecto
+    panelControl->end();
+}
 
 // Declaraciones de metodos de pantalla de bienvenida para poder definirlos despues de ambas pantallas y solucionar las dependencias circulares
 void botonConectar_callback(Fl_Widget *w, void *data);
