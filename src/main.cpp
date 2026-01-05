@@ -238,9 +238,9 @@ public:
 
     void enviarMensajeCFG()
     {
-        char buffer[64];                 // creamos un array de caracteres con tamaño suficiente para el mensaje
-        snprintf(buffer, sizeof(buffer), // snprintf es como printf pero no escribe en consola, si no en un char[]. De esta manera controlamos perfectamente el tamaño y formato el mensaje que se enviara
-                 "CFG %.2f %.2f %.2f %.2f\n",
+        char buffer[64];                      // creamos un array de caracteres con tamaño suficiente para el mensaje
+        snprintf(buffer, sizeof(buffer),      // snprintf es como printf pero no escribe en consola, si no en un char[]. De esta manera controlamos perfectamente el tamaño y formato el mensaje que se enviara
+                 "CFG %.2f %.2f %.2f %.2f\n", // CFG <kp.00> <ki.00> <kd.00> <consigna.00>
                  kp, ki, kd, consigna);
         puertoSerie->sendString(buffer);
     }
@@ -259,7 +259,7 @@ public:
 
         char buffer[16];
         snprintf(buffer, sizeof(buffer),
-                 "MODO %d\n",
+                 "MODO %d\n", // MODO <0 = lazo abierto || 1 = lazo cerrado>
                  modoInt);
         puertoSerie->sendString(buffer);
     }
@@ -268,7 +268,7 @@ public:
     {
         char buffer[16];
         snprintf(buffer, sizeof(buffer),
-                 "PWM %d\n",
+                 "PWM %d\n", // PWM <valor>
                  pwm);
         puertoSerie->sendString(buffer);
     }
