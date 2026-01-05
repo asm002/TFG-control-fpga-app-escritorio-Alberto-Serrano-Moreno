@@ -248,16 +248,28 @@ public:
     void enviarMensajeMODO()
     {
         int modoInt;
-        if (modo == Modo::LAZO_ABIERTO){
+        if (modo == Modo::LAZO_ABIERTO)
+        {
             modoInt = 0;
-        } else{
+        }
+        else
+        {
             modoInt = 1;
-        } 
+        }
 
-        char buffer[16];                 
-        snprintf(buffer, sizeof(buffer), 
+        char buffer[16];
+        snprintf(buffer, sizeof(buffer),
                  "MODO %d\n",
                  modoInt);
+        puertoSerie->sendString(buffer);
+    }
+
+    void enviarMensajePWM(int pwm)
+    {
+        char buffer[16];
+        snprintf(buffer, sizeof(buffer),
+                 "PWM %d\n",
+                 pwm);
         puertoSerie->sendString(buffer);
     }
 };
@@ -277,18 +289,10 @@ private:
     static void sliderPWM_callback(Fl_Widget *w, void *data)
     {
         Fl_Hor_Value_Slider *pSlider = static_cast<Fl_Hor_Value_Slider *>(w);
-
-        unique_ptr<SerialPort> *ppInteligentePuerto = static_cast<unique_ptr<SerialPort> *>(data); // hay que hacer esto porque es puntero a puntero (puntero a objeto puntero inteligente)
-        SerialPort *pPuerto = ppInteligentePuerto->get();
+        pantallaPrincipal *self = static_cast<pantallaPrincipal *>(data);
 
         int valorDelSlider = pSlider->value();
-
-        if (!ppInteligentePuerto || !ppInteligentePuerto->get()) // por seguridad aunque creo que no hace falta
-        {
-            fl_message("Puerto no conectado");
-            return;
-        }
-        pPuerto->send(valorDelSlider);
+        self->serialData.enviarMensajePWM(valorDelSlider);
     }
 
     static void timeout_callback(void *data) // lectura periodica del puerto serie
@@ -395,7 +399,7 @@ public:
         this->titulo->copy_label(nuevoTitulo.c_str());
     }
 
-    void setup(); //prototipo
+    void setup(); // prototipo
 
     // CONSTRUCTOR
     pantallaPrincipal(Fl_Window *v, Fl_Wizard *w)
@@ -439,8 +443,8 @@ public:
         textoTemperaturaDigital->labelsize(18);
         textoTemperaturaDigital->textsize(16);
 
-        // config_GUI_lazo_abierto(); // Comenzamos en lazo abierto por defecto
-        this->end(); // viene de Fl_Group.end()
+        config_GUI_lazo_abierto(); // Comenzamos en lazo abierto por defecto
+        this->end();               // viene de Fl_Group.end()
     }
 };
 
@@ -492,7 +496,7 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
                                         wElementosPanel,
                                         30,
                                         "PWM"};
-    sliderPWM->callback(sliderPWM_callback, &puertoSerie);
+    sliderPWM->callback(sliderPWM_callback, this);
     sliderPWM->labelsize(18);
     sliderPWM->textsize(16);
     sliderPWM->bounds(0, 255);
@@ -550,11 +554,11 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
                                        "Actualizar PID"};
     botonActualizarPID->callback(actualizarPID_callback, this);
 
-    config_GUI_lazo_abierto(); // Comenzamos en lazo abierto por defecto
     panelControl->end();
 }
 
-void pantallaPrincipal::setup(){
+void pantallaPrincipal::setup()
+{
     // Inicializamos cosas que no puedan/deban inicializarse en el constructor de pPrincipal.
     // esta funcion se llamara desde el callback del boton conectar de la pantalla de bienvenida, cuando el puerto serie ya esta abierto y la pantalla principal deja de ser invisible y ha de ser usable
     // seran cosas independientes de la interfaz (es bueno separar la logica de la interfaz y la logica de comportamiento)
@@ -562,7 +566,6 @@ void pantallaPrincipal::setup(){
     actualizar_titulo();
     serialData.actualizarModo(SerialData::Modo::LAZO_ABIERTO);
     serialData.enviarMensajeMODO();
-
 }
 
 // Declaraciones de metodos de pantalla de bienvenida para poder definirlos despues de ambas pantallas y solucionar las dependencias circulares
@@ -659,10 +662,9 @@ void botonConectar_callback(Fl_Widget *w, void *data)
         puertoSerie = make_unique<SerialPort>(puertoString); // construimos el objeto SerialPort a traves de su puntero inteligente, pasandole el string global
         DataConectar *dataConectar = static_cast<DataConectar *>(data);
         dataConectar->pWizard->next();
-        
+
         // COMUNICACIONES CON LA PANTALLA PRINCIPAL
         dataConectar->pPrincipal->setup();
-        
     }
     catch (const std::runtime_error &e)
     {
