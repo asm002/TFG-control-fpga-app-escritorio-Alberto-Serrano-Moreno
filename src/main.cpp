@@ -101,6 +101,10 @@ public:
             CloseHandle(_serialHandle);
             throw std::runtime_error("No se pudo configurar los timeouts del puerto serie.");
         }
+        // BORRAR LOS BUFFERS INTERNOS DE WINDOWS PARA EL PUERTO:
+        // PURGE_RXCLEAR: Borra el buffer de entrada (lectura)
+        // PURGE_TXCLEAR: Borra el buffer de salida (escritura)
+        PurgeComm(_serialHandle, PURGE_RXCLEAR | PURGE_TXCLEAR);
     }
 
     ~SerialPort()
@@ -311,6 +315,10 @@ private:
 
     static void timeout_callback(void *data) // lectura periodica del puerto serie
     {
+        // si el puerto no existe (cerrado), no hacemos nada y NO reprogramamos el timer
+        if (!puertoSerie)
+            return;
+
         pantallaPrincipal *self = static_cast<pantallaPrincipal *>(data); // es util usar la nomenclatura self cuando tienes un puntero que hace referencia a la misma clase en la que estas (como en python)
 
         int lectura = puertoSerie->read(); // acceso a la variable global a traves del puntero inteligente (tiene un operador "->" que hace que se pueda acceder a él como si fuera un puntero)
