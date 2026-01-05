@@ -23,7 +23,21 @@
 
 #include <cmath>
 
+#include <iostream>
+
 using namespace std;
+
+void abrirConsolaDebug()
+{
+#ifdef _WIN32
+    AllocConsole();
+    FILE *stream;
+    freopen_s(&stream, "CONOUT$", "w", stdout);
+    freopen_s(&stream, "CONOUT$", "w", stderr);
+    std::cout.clear();
+    std::cerr.clear();
+#endif
+}
 
 // FORWARD DECLARATIONS (para poder usar tipos de datos antes de definirlos)
 class SerialPort; // declaracion antes de definir la clase para poder definir el puntero inteligente de debajo
@@ -45,7 +59,7 @@ double calcularCelsius(int adcValue);
 
 // CLASES Y STRUCT
 
-struct DataConectar
+struct DataConectar // datos para el callback de boton conectar en la pantalla de bienvenida
 {
     Fl_Wizard *pWizard;
     pantallaPrincipal *pPrincipal;
@@ -102,8 +116,29 @@ public:
         if (!WriteFile(_serialHandle, data.c_str(), data.size(), &bytesWritten, NULL)) // aqui se produce el envio real. serialHandle representa al puerto abierto. NULL: operacion sincrona
         {
             CloseHandle(_serialHandle);
-            throw std::runtime_error("No se pudo enviar el brillo por el puerto serie.");
+            throw std::runtime_error("No se pudo enviar el dato por el puerto serie.");
         }
+    }
+
+    void sendString(const std::string &data)
+    {
+        DWORD bytesWritten{0};
+        if (!WriteFile(_serialHandle, data.c_str(), data.size(), &bytesWritten, NULL))
+        {
+            CloseHandle(_serialHandle);
+            throw std::runtime_error("No se pudo enviar la cadena por el puerto serie.");
+        }
+
+        // DEBUG: imprimir en consola lo que se envía
+        std::cout << "[SERIAL OUT] ";
+        for (char c : data)
+        {
+            if (c == '\n')
+                std::cout << "\\n"; // marcar salto de línea
+            else
+                std::cout << c;
+        }
+        std::cout << std::endl;
     }
 
     int read()
@@ -168,6 +203,65 @@ private:
     std::string _buffer{""};
 };
 
+class SerialData
+{
+public:
+    double kp;
+    double ki;
+    double kd;
+    double consigna;
+
+    enum class Modo
+    {
+        LAZO_ABIERTO,
+        LAZO_CERRADO
+    };
+
+    Modo modo = Modo::LAZO_ABIERTO;
+
+    SerialData(double p = 1.0, double i = 1.0, double d = 1.0, int c = 0.0) : kp(p), ki(i), kd(d), consigna(c)
+    {
+    }
+
+    void actualizarDatosPID(double kp, double ki, double kd, double consigna)
+    {
+        this->kp = kp;
+        this->ki = ki;
+        this->kd = kd;
+        this->consigna = consigna;
+    }
+
+    void actualizarModo(Modo m)
+    {
+        this->modo = m;
+    }
+
+    void enviarMensajeCFG()
+    {
+        char buffer[64];                 // creamos un array de caracteres con tamaño suficiente para el mensaje
+        snprintf(buffer, sizeof(buffer), // snprintf es como printf pero no escribe en consola, si no en un char[]. De esta manera controlamos perfectamente el tamaño y formato el mensaje que se enviara
+                 "CFG %.2f %.2f %.2f %.2f\n",
+                 kp, ki, kd, consigna);
+        puertoSerie->sendString(buffer);
+    }
+
+    void enviarMensajeMODO()
+    {
+        int modoInt;
+        if (modo == Modo::LAZO_ABIERTO){
+            modoInt = 0;
+        } else{
+            modoInt = 1;
+        } 
+
+        char buffer[16];                 
+        snprintf(buffer, sizeof(buffer), 
+                 "MODO %d\n",
+                 modoInt);
+        puertoSerie->sendString(buffer);
+    }
+};
+
 class pantallaPrincipal : public Fl_Group
 {
 private:
@@ -197,7 +291,7 @@ private:
         pPuerto->send(valorDelSlider);
     }
 
-    static void timeout_callback(void *data)
+    static void timeout_callback(void *data) // lectura periodica del puerto serie
     {
         pantallaPrincipal *self = static_cast<pantallaPrincipal *>(data); // es util usar la nomenclatura self cuando tienes un puntero que hace referencia a la misma clase en la que estas (como en python)
 
@@ -210,7 +304,7 @@ private:
         Fl::repeat_timeout(0.01, timeout_callback, data); // REPROGRAMAR TIMER
     }
 
-    void lazo_cerrado()
+    void config_GUI_lazo_cerrado()
     {
         sliderPWM->deactivate();
         inputKp->activate();
@@ -220,7 +314,7 @@ private:
         sliderREF->activate();
     }
 
-    void lazo_abierto()
+    void config_GUI_lazo_abierto()
     {
         rbLazoAbierto->value(1); // por defecto comienza encendido. Por tanto, el otro radio button comienza apagado (por pertenecer ambos al mismo grupo)
         sliderPWM->activate();
@@ -231,23 +325,35 @@ private:
         sliderREF->deactivate();
     }
 
-    static void radio_callback(Fl_Widget *w, void *data)
+    static void radio_callback(Fl_Widget *w, void *data) // accion de los radio buttons, para conmutar entre lazo abierto y cerrado
     {
         pantallaPrincipal *self = static_cast<pantallaPrincipal *>(data);
         Fl_Round_Button *rb = static_cast<Fl_Round_Button *>(w);
         if (self->rbLazoCerrado->value() == 1)
         {
             // LAZO CERRADO
-            self->lazo_cerrado();
+            self->config_GUI_lazo_cerrado();
+            self->serialData.actualizarModo(SerialData::Modo::LAZO_CERRADO);
+            self->serialData.enviarMensajeMODO();
         }
         else
         {
             // LAZO ABIERTO
-            self->lazo_abierto();
+            self->config_GUI_lazo_abierto();
+            self->serialData.actualizarModo(SerialData::Modo::LAZO_ABIERTO);
+            self->serialData.enviarMensajeMODO();
         }
     }
 
     void configurarPanelControl(const int wPanel, const int hPanel, const int xPanel, const int yPanel, const int margenPanel); // prototipo
+
+    static void actualizarPID_callback(Fl_Widget *w, void *data)
+    {
+        pantallaPrincipal *self = static_cast<pantallaPrincipal *>(data);
+
+        self->serialData.actualizarDatosPID(self->inputKp->value(), self->inputKi->value(), self->inputKd->value(), self->sliderREF->value());
+        self->serialData.enviarMensajeCFG(); // manda por el puerto serie el PID y la consigna
+    }
 
 public:
     // uso atributos puntero para poder crear los objetos en el cuerpo del constructor (como me gusta mas a mi para tener encima las const int de dimensionado y tener todo junto)
@@ -271,6 +377,8 @@ public:
     Fl_Hor_Value_Slider *sliderREF;
     Fl_Button *botonActualizarPID;
 
+    SerialData serialData;
+
     void activar_lectura()
     { // funcion que no es estatica porque requiere de que haya un objeto instanciado (y ademas no requiere una firma concreta impuesta)
         Fl::add_timeout(0.01, timeout_callback, this);
@@ -287,6 +395,9 @@ public:
         this->titulo->copy_label(nuevoTitulo.c_str());
     }
 
+    void setup(); //prototipo
+
+    // CONSTRUCTOR
     pantallaPrincipal(Fl_Window *v, Fl_Wizard *w)
         : ventana(v),
           wizard(w),
@@ -302,6 +413,7 @@ public:
         titulo->labelfont(FL_BOLD);
 
         // BOTON VOLVER (por ahora sirve para cambiar de puerto. Dara problemas en el futuro cuando haya mas cosas?)
+        // se me ocurre que quiza sea mejor que sea un boton "reiniciar", que te lleve a la pantalla de bienvenida pero reseteando todo, como si volvieras a ejecutar el programa
         const int wBotonVolver = 100;
         const int hBotonVolver = 40;
         const int xBotonVolver = 15;
@@ -318,6 +430,7 @@ public:
                                10);
 
         // TEXTO DE TEMPERATURA DIGITAL LEIDA
+        // esto ira luego en el panel de graficas
         const int wTextoTemperaturaDigital = 70;
         const int hTextoTemperaturaDigital = 50;
         const int xTextoTemperaturaDigital = v->w() / 2 - wTextoTemperaturaDigital / 2;
@@ -326,6 +439,7 @@ public:
         textoTemperaturaDigital->labelsize(18);
         textoTemperaturaDigital->textsize(16);
 
+        // config_GUI_lazo_abierto(); // Comenzamos en lazo abierto por defecto
         this->end(); // viene de Fl_Group.end()
     }
 };
@@ -419,8 +533,7 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
                                         yElementosPanel,
                                         wElementosPanel,
                                         30,
-                                        "Consigna (digital)"
-    };
+                                        "Consigna (digital)"};
     sliderREF->labelsize(18);
     sliderREF->textsize(16);
     sliderREF->bounds(500, 1000);
@@ -435,9 +548,21 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
                                        wElementosPanel,
                                        30,
                                        "Actualizar PID"};
+    botonActualizarPID->callback(actualizarPID_callback, this);
 
-    lazo_abierto(); // Comenzamos en lazo abierto por defecto
+    config_GUI_lazo_abierto(); // Comenzamos en lazo abierto por defecto
     panelControl->end();
+}
+
+void pantallaPrincipal::setup(){
+    // Inicializamos cosas que no puedan/deban inicializarse en el constructor de pPrincipal.
+    // esta funcion se llamara desde el callback del boton conectar de la pantalla de bienvenida, cuando el puerto serie ya esta abierto y la pantalla principal deja de ser invisible y ha de ser usable
+    // seran cosas independientes de la interfaz (es bueno separar la logica de la interfaz y la logica de comportamiento)
+    activar_lectura();
+    actualizar_titulo();
+    serialData.actualizarModo(SerialData::Modo::LAZO_ABIERTO);
+    serialData.enviarMensajeMODO();
+
 }
 
 // Declaraciones de metodos de pantalla de bienvenida para poder definirlos despues de ambas pantallas y solucionar las dependencias circulares
@@ -447,6 +572,9 @@ void botonActualizar_callback(Fl_Widget *w, void *data);
 
 int main()
 {
+    abrirConsolaDebug();
+
+    std::cout << "Debug iniciado\n";
 
     Fl_Window ventana(0, 0, 1200, 676, "Control de temperatura - Alberto Serrano Moreno");
     Fl_Wizard wizard{0, 0, ventana.w(), ventana.h()}; // widget invisible con el mismo tamaño que la ventana que nos sirve para iterar la visibilidad de sus grupos hijos
@@ -531,9 +659,10 @@ void botonConectar_callback(Fl_Widget *w, void *data)
         puertoSerie = make_unique<SerialPort>(puertoString); // construimos el objeto SerialPort a traves de su puntero inteligente, pasandole el string global
         DataConectar *dataConectar = static_cast<DataConectar *>(data);
         dataConectar->pWizard->next();
+        
         // COMUNICACIONES CON LA PANTALLA PRINCIPAL
-        dataConectar->pPrincipal->activar_lectura();
-        dataConectar->pPrincipal->actualizar_titulo();
+        dataConectar->pPrincipal->setup();
+        
     }
     catch (const std::runtime_error &e)
     {
