@@ -157,8 +157,22 @@ public:
             }
             else // si es el delimitador, no lo guardas y:
             {
-                int value = std::stoi(_buffer); //  conviertes el buffer de cadena de caracteres (ascii) a int
-                _buffer = "";                   // limpieza del buffer para recibir el proximo dato
+                int value = -1; // Valor por defecto de error
+                try
+                {
+                    if (!_buffer.empty())
+                    {
+                        value = std::stoi(_buffer);
+                    }
+                }
+                catch (...) // captura cualquier tipo de error
+                {
+                    // si falla stoi() (llega ruido o algo que no sea un numero) no hacemos nada, simplemente devolvemos -1 y el programa sigue vivo
+                    // Opcional: imprimir error en consola debug
+                    std::cerr << "Error de trama recibida: " << _buffer << std::endl;
+                    value = -1;
+                }
+                _buffer = "";
                 return value;
             }
         }
