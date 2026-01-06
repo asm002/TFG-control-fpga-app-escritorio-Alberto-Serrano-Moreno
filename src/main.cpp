@@ -545,13 +545,13 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
                                  30,
                                  "Kd:"};
 
-    inputKp->value(10.0);
+    inputKp->value(7.0);
     inputKp->step(0.1);
 
     inputKi->value(0.5);
     inputKi->step(0.01);
 
-    inputKd->value(0.0);
+    inputKd->value(0.4);
     inputKd->step(0.1);
 
     yElementosPanel += 50;
@@ -564,7 +564,7 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
     sliderREF->textsize(16);
     sliderREF->bounds(500, 1000);
     sliderREF->step(1);
-    sliderREF->value(500);
+    sliderREF->value(650);
     sliderREF->type(FL_HOR_NICE_SLIDER);
 
     // BOTON ACTUALIZAR PID
