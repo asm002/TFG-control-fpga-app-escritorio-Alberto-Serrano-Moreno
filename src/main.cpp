@@ -27,6 +27,11 @@
 
 using namespace std;
 
+#define KP0 8.0
+#define KI0 0.6
+#define KD0 0.0
+#define REF0 600
+
 void abrirConsolaDebug()
 {
 #ifdef _WIN32
@@ -397,12 +402,17 @@ private:
         string mensaje = puertoSerie->readString(); // acceso a la variable global a traves del puntero inteligente (tiene un operador "->" que hace que se pueda acceder a él como si fuera un puntero)
 
         if (mensaje != "")
-        { // esperar al dato completo para mostrarlo (no es necesario con la nueva funcion readString que lee el mensaje de una vez en lugar de byte a byte)
-            // double tempCelsius = calcularCelsius(lectura);
-            // self->textoTemperaturaDigital->value(to_string(lectura).c_str());
+        { // esperar al dato completo (no es necesario con la nueva funcion readString que lee el mensaje de una vez en lugar de byte a byte)
             self->serialData.leerMensajeDatosGraficos(mensaje);
+
             float temperatura_recibida = self->serialData.datosGraficos.temperatura;
-            self->textoTemperaturaDigital->value(static_cast<double>(temperatura_recibida));
+            float consigna_recibida = self->serialData.datosGraficos.consigna;
+            float error_recibido = self->serialData.datosGraficos.error;
+            int pwm_recibido = self->serialData.datosGraficos.pwm;
+            self->textoADC->value(static_cast<double>(temperatura_recibida));
+            self->textoConsigna->value(consigna_recibida);
+            self->textoError->value(error_recibido);
+            self->textoPWM->value(pwm_recibido);
         }
         Fl::repeat_timeout(0.01, timeout_callback, data); // REPROGRAMAR TIMER
     }
@@ -415,6 +425,9 @@ private:
         inputKd->activate();
         botonActualizarPID->activate();
         sliderREF->activate();
+
+        textoConsigna->activate();
+        textoError->activate();
     }
 
     void config_GUI_lazo_abierto()
@@ -426,6 +439,9 @@ private:
         inputKd->deactivate();
         botonActualizarPID->deactivate();
         sliderREF->deactivate();
+
+        textoConsigna->deactivate();
+        textoError->deactivate();
     }
 
     static void radio_callback(Fl_Widget *w, void *data) // accion de los radio buttons, para conmutar entre lazo abierto y cerrado
@@ -438,6 +454,7 @@ private:
             self->config_GUI_lazo_cerrado();
             self->serialData.actualizarModo(SerialData::Modo::LAZO_CERRADO);
             self->serialData.enviarMensajeMODO();
+            self->actualizarPID_callback(self->botonActualizarPID, self); // para mandar los valores visibles mantalla nada mas cambiar a lazo cerrado, sin tener que pulsar el boton la primera vez
         }
         else
         {
@@ -445,6 +462,7 @@ private:
             self->config_GUI_lazo_abierto();
             self->serialData.actualizarModo(SerialData::Modo::LAZO_ABIERTO);
             self->serialData.enviarMensajeMODO();
+            self->sliderPWM_callback(self->sliderPWM, self); // para mandar el valor visible en el slider inmediatamente, sin tener que moverlo la primera vez
         }
     }
 
@@ -467,8 +485,6 @@ public:
     Fl_Box *titulo;
     Fl_Button *botonVolver;
 
-    Fl_Output *textoTemperaturaDigital;
-
     Fl_Group *panelControl;
     Fl_Box *tituloPanel;
     Fl_Round_Button *rbLazoCerrado;
@@ -481,6 +497,12 @@ public:
     Fl_Button *botonActualizarPID;
 
     SerialData serialData;
+
+    Fl_Pack *columnaDatosGraficos;
+    Fl_Output *textoADC;
+    Fl_Output *textoConsigna;
+    Fl_Output *textoError;
+    Fl_Output *textoPWM;
 
     void activar_lectura()
     { // funcion que no es estatica porque requiere de que haya un objeto instanciado (y ademas no requiere una firma concreta impuesta)
@@ -532,15 +554,39 @@ public:
                                yBotonVolver + hBotonVolver + 30,
                                10);
 
-        // TEXTO DE TEMPERATURA DIGITAL LEIDA
+        // COLUMNA DE VALORES DE LAS VARIABLES GRAFICADAS
         // esto ira luego en el panel de graficas
-        const int wTextoTemperaturaDigital = 70;
-        const int hTextoTemperaturaDigital = 50;
-        const int xTextoTemperaturaDigital = v->w() / 2 - wTextoTemperaturaDigital / 2;
-        const int yTextoTemperaturaDigital = v->h() - hTextoTemperaturaDigital * (5 / 4.0);
-        textoTemperaturaDigital = new Fl_Output{xTextoTemperaturaDigital, yTextoTemperaturaDigital, wTextoTemperaturaDigital, hTextoTemperaturaDigital, "Temperatura digital"};
-        textoTemperaturaDigital->labelsize(18);
-        textoTemperaturaDigital->textsize(16);
+        constexpr int hWidgetsColumnaDatosGraficos = 35;
+        auto formatoWidgetsColumnaDatosGraficos = [](Fl_Output *w) // funcion lambda
+        {
+            w->labelsize(18);
+            w->textsize(16);
+            w->align(FL_ALIGN_BOTTOM);
+        };
+        columnaDatosGraficos = new Fl_Pack(v->w() / 2,
+                                           200,
+                                           100,
+                                           35 * 4);
+        columnaDatosGraficos->type(Fl_Pack::VERTICAL);
+        columnaDatosGraficos->spacing(40); // espacio vertical entre widgets
+
+        // TEXTO DE TEMPERATURA DIGITAL LEIDA (ADC)
+        textoADC = new Fl_Output{0, 0, 0, hWidgetsColumnaDatosGraficos, "ADC"};
+        formatoWidgetsColumnaDatosGraficos(textoADC);
+
+        // TEXTO CONSIGNA
+        textoConsigna = new Fl_Output{0, 0, 0, hWidgetsColumnaDatosGraficos, "Consigna"};
+        formatoWidgetsColumnaDatosGraficos(textoConsigna);
+
+        // TEXTO ERROR
+        textoError = new Fl_Output{0, 0, 0, hWidgetsColumnaDatosGraficos, "Error"};
+        formatoWidgetsColumnaDatosGraficos(textoError);
+
+        // TEXTO PWM
+        textoPWM = new Fl_Output{0, 0, 0, hWidgetsColumnaDatosGraficos, "PWM"};
+        formatoWidgetsColumnaDatosGraficos(textoPWM);
+
+        columnaDatosGraficos->end();
 
         config_GUI_lazo_abierto(); // Comenzamos en lazo abierto por defecto
         this->end();               // viene de Fl_Group.end()
@@ -622,13 +668,13 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
                                  30,
                                  "Kd:"};
 
-    inputKp->value(8.0);
+    inputKp->value(KP0);
     inputKp->step(0.1);
 
-    inputKi->value(0.4);
+    inputKi->value(KI0);
     inputKi->step(0.01);
 
-    inputKd->value(20.0);
+    inputKd->value(KD0);
     inputKd->step(0.1);
 
     yElementosPanel += 50;
@@ -641,7 +687,7 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
     sliderREF->textsize(16);
     sliderREF->bounds(500, 1000);
     sliderREF->step(1);
-    sliderREF->value(600);
+    sliderREF->value(REF0);
     sliderREF->type(FL_HOR_NICE_SLIDER);
 
     // BOTON ACTUALIZAR PID
@@ -665,6 +711,7 @@ void pantallaPrincipal::setup()
     actualizar_titulo();
     serialData.actualizarModo(SerialData::Modo::LAZO_ABIERTO);
     serialData.enviarMensajeMODO();
+    sliderPWM_callback(sliderPWM, this); // mandamos el PWM visible en el slider nada mas abrir la pantalla principal
 }
 
 // Declaraciones de metodos de pantalla de bienvenida para poder definirlos despues de ambas pantallas y solucionar las dependencias circulares
