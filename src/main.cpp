@@ -143,6 +143,49 @@ public:
                 std::cout << c;
         }
         std::cout << std::endl;
+        // ----
+    }
+
+    // Esta funcion NO lee byte a byte, si no en bloques de hasta 64 bytes (y funciona igual, leyendo hasta el delimitador \n)
+    // esto permite leer los mensajes que mando desde el STM (DATA ... (30 bytes aprox)) en UNA SOLA ITERACION
+    // de este modo, si el timeout_callback se ejecuta cada 10ms, cada 10ms podemos leer un mensaje completo de 64 bytes, en vez de 1 solo byte como antes
+    // Si leyera byte a byte como antes, los mensajes que recibo del STM que ocupan unos 30 bytes, tardaria en leerlos 30 iteraciones de readString
+    // teniendo el timeout cada 10 ms, eso son 300ms en leer UN SOLO MENSAJE
+    // dado que en el arduino ejecutamos el lazo de control y enviamos mensaje cada 100 ms, estariamos leyendo 3 veces mas lento de lo que se generan los mensajes
+    // eso generaria un lag tremendo, con datos que no se corresponden con el momento actual (comprobado) y un desborde del buffer interno de windows que nunca se vacía
+    string readString()
+    {
+        char tempBuffer[64];                                                              // buffer temporal de lectura
+        if (!ReadFile(_serialHandle, &tempBuffer, sizeof(tempBuffer), &_bytesRead, NULL)) // aqui se produce la lectura de sizeof(tempBuffer) = 64 bytes
+        {
+            CloseHandle(_serialHandle);
+            throw std::runtime_error("No se pudo leer del puerto serie.");
+        }
+
+        if (_bytesRead == 0)
+            return ""; // si no llega nada, devolvemos string vacio
+
+        // Si ha llegado algo (un bloque, de 64 bytes maximo):
+        for (int i = 0; i < _bytesRead; ++i) // leemos byte a byte el bloque
+        {
+            char byteLeido = tempBuffer[i];
+            if (byteLeido != '\n') // si no es el delimitador, guardamos el byte (es contenido)
+            {
+                _buffer += byteLeido;
+            }
+            else // es delimitador, no lo guardamos (el '\n') y terminamos el mensaje porque ya esta completo
+            {
+                string mensaje = _buffer;
+                _buffer = "";
+                return mensaje;
+            }
+        }
+        // si se llega hasta aqui, significa que el for ha terminado de leer el bloque entero pero no ha encontrado ningun \n
+        // eso significa que se esta mandando un mensaje muy largo, de mas de 64 bytes
+        // en tal caso se necesita mas de una iteracion de readString para leerlo completamente
+        // mientras tanto, hay que devolver algo porque la funcion debe devolver un string siempre
+        // (no aplica en mi caso porque no voy a mandar mensajes tan largos desde el STM, pero bueno)
+        return "";
     }
 
     int read()
@@ -235,7 +278,16 @@ public:
         LAZO_CERRADO
     };
 
+    struct DatosGraficos
+    {
+        float consigna = 0.0f;
+        float temperatura = 0.0f;
+        float error = 0.0f;
+        int pwm = 0;
+    };
+
     Modo modo = Modo::LAZO_ABIERTO;
+    DatosGraficos datosGraficos;
 
     SerialData(double p = 1.0, double i = 1.0, double d = 1.0, int c = 0.0) : kp(p), ki(i), kd(d), consigna(c)
     {
@@ -290,6 +342,27 @@ public:
                  pwm);
         puertoSerie->sendString(buffer);
     }
+
+    void leerMensajeDatosGraficos(string mensaje)
+    {
+        if (mensaje.find("DATA") == 0)
+        {
+            int tokensRecogidos = 0;
+            float c, t, e;
+            int p;
+            tokensRecogidos = sscanf(mensaje.c_str(),
+                                     "DATA %f %f %f %d", // DATA <CONSIGNA.00> <TEMPERATURA.00> <ERROR.00> <PWM>
+                                     &c, &t, &e, &p);
+            // nos aseguramos de que se ha leido correctamente antes de cambiar nada
+            if (tokensRecogidos == 4)
+            {
+                datosGraficos.consigna = c;
+                datosGraficos.temperatura = t;
+                datosGraficos.error = e;
+                datosGraficos.pwm = p;
+            }
+        }
+    }
 };
 
 class pantallaPrincipal : public Fl_Group
@@ -321,11 +394,15 @@ private:
 
         pantallaPrincipal *self = static_cast<pantallaPrincipal *>(data); // es util usar la nomenclatura self cuando tienes un puntero que hace referencia a la misma clase en la que estas (como en python)
 
-        int lectura = puertoSerie->read(); // acceso a la variable global a traves del puntero inteligente (tiene un operador "->" que hace que se pueda acceder a él como si fuera un puntero)
-        if (lectura >= 0)
-        { // esperar al dato completo para mostrarlo
+        string mensaje = puertoSerie->readString(); // acceso a la variable global a traves del puntero inteligente (tiene un operador "->" que hace que se pueda acceder a él como si fuera un puntero)
+
+        if (mensaje != "")
+        { // esperar al dato completo para mostrarlo (no es necesario con la nueva funcion readString que lee el mensaje de una vez en lugar de byte a byte)
             // double tempCelsius = calcularCelsius(lectura);
-            self->textoTemperaturaDigital->value(to_string(lectura).c_str());
+            // self->textoTemperaturaDigital->value(to_string(lectura).c_str());
+            self->serialData.leerMensajeDatosGraficos(mensaje);
+            float temperatura_recibida = self->serialData.datosGraficos.temperatura;
+            self->textoTemperaturaDigital->value(static_cast<double>(temperatura_recibida));
         }
         Fl::repeat_timeout(0.01, timeout_callback, data); // REPROGRAMAR TIMER
     }
@@ -545,13 +622,13 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
                                  30,
                                  "Kd:"};
 
-    inputKp->value(7.0);
+    inputKp->value(8.0);
     inputKp->step(0.1);
 
-    inputKi->value(0.5);
+    inputKi->value(0.4);
     inputKi->step(0.01);
 
-    inputKd->value(0.4);
+    inputKd->value(20.0);
     inputKd->step(0.1);
 
     yElementosPanel += 50;
@@ -564,7 +641,7 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
     sliderREF->textsize(16);
     sliderREF->bounds(500, 1000);
     sliderREF->step(1);
-    sliderREF->value(650);
+    sliderREF->value(600);
     sliderREF->type(FL_HOR_NICE_SLIDER);
 
     // BOTON ACTUALIZAR PID
