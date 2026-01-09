@@ -27,9 +27,11 @@
 
 using namespace std;
 
+#define PERIODO_INTERRUPCION_PERIODICA 0.01 // en segundos. Actualmente 10ms. Deberia poder subirse sin problema hasta 50ms y los datos siguen llegando a la misma velocidad (cada 100ms)
+
 #define KP0 8.0
 #define KI0 0.6
-#define KD0 0.0
+#define KD0 2.0
 #define REF0 600
 
 void abrirConsolaDebug()
@@ -414,7 +416,7 @@ private:
             self->textoError->value(error_recibido);
             self->textoPWM->value(pwm_recibido);
         }
-        Fl::repeat_timeout(0.01, timeout_callback, data); // REPROGRAMAR TIMER
+        Fl::repeat_timeout(PERIODO_INTERRUPCION_PERIODICA, timeout_callback, data); // REPROGRAMAR TIMER
     }
 
     void config_GUI_lazo_cerrado()
@@ -498,6 +500,7 @@ public:
 
     SerialData serialData;
 
+    Fl_Group *grupoColumnaDatosGraficos;
     Fl_Pack *columnaDatosGraficos;
     Fl_Output *textoADC;
     Fl_Output *textoConsigna;
@@ -506,7 +509,7 @@ public:
 
     void activar_lectura()
     { // funcion que no es estatica porque requiere de que haya un objeto instanciado (y ademas no requiere una firma concreta impuesta)
-        Fl::add_timeout(0.01, timeout_callback, this);
+        Fl::add_timeout(PERIODO_INTERRUPCION_PERIODICA, timeout_callback, this);
     }
 
     void detener_lectura()
@@ -557,18 +560,27 @@ public:
         // COLUMNA DE VALORES DE LAS VARIABLES GRAFICADAS
         // esto ira luego en el panel de graficas
         constexpr int hWidgetsColumnaDatosGraficos = 35;
+        constexpr int spacingWidgetsColumnaDatosGraficos = 80;
+        constexpr int margen = 15;
         auto formatoWidgetsColumnaDatosGraficos = [](Fl_Output *w) // funcion lambda
         {
             w->labelsize(18);
             w->textsize(16);
             w->align(FL_ALIGN_BOTTOM);
         };
-        columnaDatosGraficos = new Fl_Pack(v->w() / 2,
-                                           200,
+        grupoColumnaDatosGraficos = new Fl_Group{panelControl->x() + panelControl->w() + 50,
+                                                 panelControl->y(),
+                                                 100 + 2 * margen,
+                                                 //  4 * hWidgetsColumnaDatosGraficos + 4 * spacingWidgetsColumnaDatosGraficos + 1 * margen};
+                                                 panelControl->h()};
+        grupoColumnaDatosGraficos->box(FL_THIN_UP_BOX);
+        columnaDatosGraficos = new Fl_Pack(grupoColumnaDatosGraficos->x() + margen,
+                                           grupoColumnaDatosGraficos->y() + (grupoColumnaDatosGraficos->h()) / 2 - (4 * hWidgetsColumnaDatosGraficos + 3 * spacingWidgetsColumnaDatosGraficos)/2,
                                            100,
-                                           35 * 4);
+                                           0);
         columnaDatosGraficos->type(Fl_Pack::VERTICAL);
-        columnaDatosGraficos->spacing(40); // espacio vertical entre widgets
+        columnaDatosGraficos->spacing(spacingWidgetsColumnaDatosGraficos); // espacio vertical entre widgets
+        // columnaDatosGraficos->box(FL_THIN_UP_BOX);
 
         // TEXTO DE TEMPERATURA DIGITAL LEIDA (ADC)
         textoADC = new Fl_Output{0, 0, 0, hWidgetsColumnaDatosGraficos, "ADC"};
@@ -587,6 +599,7 @@ public:
         formatoWidgetsColumnaDatosGraficos(textoPWM);
 
         columnaDatosGraficos->end();
+        grupoColumnaDatosGraficos->end();
 
         config_GUI_lazo_abierto(); // Comenzamos en lazo abierto por defecto
         this->end();               // viene de Fl_Group.end()
