@@ -384,9 +384,10 @@ private:
         Fl_Color color;
         float minValor;
         float maxValor;
+        std::string nombre;
 
-        Serie(Fl_Color c, int capacidad, float minV, float maxV)
-            : color(c), minValor(minV), maxValor(maxV)
+        Serie(const std::string &n, Fl_Color c, int capacidad, float minV, float maxV)
+            : nombre(n), color(c), minValor(minV), maxValor(maxV)
         {
             buffer.reserve(capacidad);
         }
@@ -395,10 +396,34 @@ private:
     std::vector<Serie> series;
     size_t maxPuntos;
 
-    // 🔹 OFFSCREEN BUFFER
+    // Buffer offscreen para evitar parpadeos (se dibuja todo en memoria y luego se actualiza la pantalla de una vez)
     Fl_Offscreen offscreen = 0;
 
-    static constexpr int MARGEN_Y = 8;
+    static constexpr int MARGEN_Y = 8; // para que los valores extremos no se dibujen justo en el borde de la grafica y no se vean
+
+    void dibujarLeyenda()
+    {
+        int x0 = 8;
+        int y0 = 8;
+        int dy = 16;
+
+        for (const auto &s : series)
+        {
+            // Color
+            fl_color(s.color);
+            fl_rectf(x0, y0 + 4, 10, 10);
+
+            // Texto
+            fl_color(FL_BLACK);
+            char txt[128];
+            snprintf(txt, sizeof(txt), "%s [ %g --> %g ]",
+                     s.nombre.c_str(), s.minValor, s.maxValor);
+
+            fl_draw(txt, x0 + 16, y0 + 14);
+
+            y0 += dy;
+        }
+    }
 
 public:
     Grafica(int x, int y, int w, int h, const char *label = nullptr)
@@ -415,9 +440,9 @@ public:
             fl_delete_offscreen(offscreen);
     }
 
-    int añadirSerie(Fl_Color color, float minV, float maxV)
+    int añadirSerie(const std::string &nombre, Fl_Color color, float minV, float maxV)
     {
-        series.emplace_back(color, maxPuntos, minV, maxV);
+        series.emplace_back(nombre, color, maxPuntos, minV, maxV);
         return series.size() - 1;
     }
 
@@ -508,15 +533,16 @@ public:
 
         fl_pop_clip();
 
+        dibujarLeyenda();
+
         fl_end_offscreen();
 
         // ==========================
-        // COPIA ATÓMICA A PANTALLA
+        // COPIA DE MEMORIA A PANTALLA
         // ==========================
         fl_copy_offscreen(x(), y(), w(), h(), offscreen, 0, 0);
     }
 };
-
 
 class pantallaPrincipal : public Fl_Group
 {
@@ -761,11 +787,11 @@ public:
                                650,
                                grupoColumnaDatosGraficos->h(),
                                "GRÁFICAS"};
-        //graficas->setRango(-500.0, 1000.0);
-        idADC = graficas->añadirSerie(FL_GREEN, 500.0, 1000.0);
-        idConsigna = graficas->añadirSerie(FL_BLUE, 500.0, 1000.0);
-        idError = graficas->añadirSerie(FL_RED, -500.0, 500.0);
-        idPWM = graficas->añadirSerie(FL_MAGENTA, 0.0, 255.0);
+        // graficas->setRango(-500.0, 1000.0);
+        idADC = graficas->añadirSerie("ADC", FL_GREEN, 500.0, 1000.0);
+        idConsigna = graficas->añadirSerie("CONSIGNA", FL_BLUE, 500.0, 1000.0);
+        idError = graficas->añadirSerie("ERROR", FL_RED, -500.0, 500.0);
+        idPWM = graficas->añadirSerie("PWM", FL_MAGENTA, 0.0, 255.0);
 
         config_GUI_lazo_abierto(); // Comenzamos en lazo abierto por defecto
         this->end();               // viene de Fl_Group.end()
