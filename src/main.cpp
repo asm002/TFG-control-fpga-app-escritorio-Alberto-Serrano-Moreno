@@ -25,9 +25,12 @@
 
 #include <iostream>
 
+#include <FL/Fl_Widget.H>
+#include <FL/fl_draw.H>
+
 using namespace std;
 
-#define PERIODO_INTERRUPCION_PERIODICA 0.01 // en segundos. Actualmente 10ms. Deberia poder subirse sin problema hasta 50ms y los datos siguen llegando a la misma velocidad (cada 100ms)
+#define PERIODO_INTERRUPCION_PERIODICA 0.05 // en segundos. Actualmente 10ms. Deberia poder subirse sin problema hasta 50ms y los datos siguen llegando a la misma velocidad (cada 100ms)
 
 #define KP0 8.0
 #define KI0 0.6
@@ -372,6 +375,149 @@ public:
     }
 };
 
+class Grafica : public Fl_Widget
+{
+private:
+    struct Serie
+    {
+        std::vector<float> buffer;
+        Fl_Color color;
+        float minValor;
+        float maxValor;
+
+        Serie(Fl_Color c, int capacidad, float minV, float maxV)
+            : color(c), minValor(minV), maxValor(maxV)
+        {
+            buffer.reserve(capacidad);
+        }
+    };
+
+    std::vector<Serie> series;
+    size_t maxPuntos;
+
+    // 🔹 OFFSCREEN BUFFER
+    Fl_Offscreen offscreen = 0;
+
+    static constexpr int MARGEN_Y = 8;
+
+public:
+    Grafica(int x, int y, int w, int h, const char *label = nullptr)
+        : Fl_Widget(x, y, w, h, label), maxPuntos(w)
+    {
+        box(FL_FLAT_BOX);
+
+        offscreen = fl_create_offscreen(w, h);
+    }
+
+    ~Grafica()
+    {
+        if (offscreen)
+            fl_delete_offscreen(offscreen);
+    }
+
+    int añadirSerie(Fl_Color color, float minV, float maxV)
+    {
+        series.emplace_back(color, maxPuntos, minV, maxV);
+        return series.size() - 1;
+    }
+
+    void añadirDato(int idSerie, float valor)
+    {
+        if (idSerie < 0 || idSerie >= (int)series.size())
+            return;
+
+        Serie &s = series[idSerie];
+
+        if (s.buffer.size() >= maxPuntos)
+            s.buffer.erase(s.buffer.begin());
+
+        s.buffer.push_back(valor);
+
+        redraw();
+    }
+
+    void resize(int X, int Y, int W, int H) override
+    {
+        Fl_Widget::resize(X, Y, W, H);
+
+        maxPuntos = W;
+
+        if (offscreen)
+            fl_delete_offscreen(offscreen);
+
+        offscreen = fl_create_offscreen(W, H);
+    }
+
+    void draw() override
+    {
+        if (!offscreen)
+            return;
+
+        // ==========================
+        // DIBUJO EN MEMORIA
+        // ==========================
+        fl_begin_offscreen(offscreen);
+
+        fl_push_clip(0, 0, w(), h());
+
+        // Fondo
+        fl_color(FL_WHITE);
+        fl_rectf(0, 0, w(), h());
+
+        // Rejilla simple (línea central)
+        fl_color(fl_rgb_color(200, 200, 200));
+        int yMedio = h() / 2;
+        fl_line(0, yMedio, w(), yMedio);
+
+        // Series
+        for (const auto &s : series)
+        {
+            if (s.buffer.size() < 2)
+                continue;
+
+            fl_color(s.color);
+            fl_line_style(FL_SOLID, 2);
+
+            float rango = s.maxValor - s.minValor;
+            if (rango == 0)
+                rango = 1;
+
+            for (size_t i = 1; i < s.buffer.size(); ++i)
+            {
+                float v0 = s.buffer[i - 1];
+                float v1 = s.buffer[i];
+
+                float n0 = (v0 - s.minValor) / rango;
+                float n1 = (v1 - s.minValor) / rango;
+
+                int y0 = (h() - MARGEN_Y) - n0 * (h() - 2 * MARGEN_Y);
+                int y1 = (h() - MARGEN_Y) - n1 * (h() - 2 * MARGEN_Y);
+
+                int x0 = i - 1;
+                int x1 = i;
+
+                fl_line(x0, y0, x1, y1);
+            }
+        }
+
+        fl_line_style(0);
+
+        // Marco
+        fl_color(FL_BLACK);
+        fl_rect(0, 0, w(), h());
+
+        fl_pop_clip();
+
+        fl_end_offscreen();
+
+        // ==========================
+        // COPIA ATÓMICA A PANTALLA
+        // ==========================
+        fl_copy_offscreen(x(), y(), w(), h(), offscreen, 0, 0);
+    }
+};
+
+
 class pantallaPrincipal : public Fl_Group
 {
 private:
@@ -411,10 +557,16 @@ private:
             float consigna_recibida = self->serialData.datosGraficos.consigna;
             float error_recibido = self->serialData.datosGraficos.error;
             int pwm_recibido = self->serialData.datosGraficos.pwm;
+
             self->textoADC->value(static_cast<double>(temperatura_recibida));
             self->textoConsigna->value(consigna_recibida);
             self->textoError->value(error_recibido);
             self->textoPWM->value(pwm_recibido);
+
+            self->graficas->añadirDato(self->idADC, temperatura_recibida);
+            self->graficas->añadirDato(self->idConsigna, consigna_recibida);
+            self->graficas->añadirDato(self->idError, error_recibido);
+            self->graficas->añadirDato(self->idPWM, pwm_recibido);
         }
         Fl::repeat_timeout(PERIODO_INTERRUPCION_PERIODICA, timeout_callback, data); // REPROGRAMAR TIMER
     }
@@ -507,6 +659,9 @@ public:
     Fl_Output *textoError;
     Fl_Output *textoPWM;
 
+    Grafica *graficas;
+    int idADC, idConsigna, idError, idPWM;
+
     void activar_lectura()
     { // funcion que no es estatica porque requiere de que haya un objeto instanciado (y ademas no requiere una firma concreta impuesta)
         Fl::add_timeout(PERIODO_INTERRUPCION_PERIODICA, timeout_callback, this);
@@ -562,7 +717,8 @@ public:
         constexpr int hWidgetsColumnaDatosGraficos = 35;
         constexpr int spacingWidgetsColumnaDatosGraficos = 80;
         constexpr int margen = 15;
-        auto formatoWidgetsColumnaDatosGraficos = [](Fl_Output *w) // funcion lambda
+        // funcion lambda
+        auto formatoWidgetsColumnaDatosGraficos = [](Fl_Output *w)
         {
             w->labelsize(18);
             w->textsize(16);
@@ -575,12 +731,11 @@ public:
                                                  panelControl->h()};
         grupoColumnaDatosGraficos->box(FL_THIN_UP_BOX);
         columnaDatosGraficos = new Fl_Pack(grupoColumnaDatosGraficos->x() + margen,
-                                           grupoColumnaDatosGraficos->y() + (grupoColumnaDatosGraficos->h()) / 2 - (4 * hWidgetsColumnaDatosGraficos + 3 * spacingWidgetsColumnaDatosGraficos)/2,
+                                           grupoColumnaDatosGraficos->y() + (grupoColumnaDatosGraficos->h()) / 2 - (4 * hWidgetsColumnaDatosGraficos + 3 * spacingWidgetsColumnaDatosGraficos) / 2,
                                            100,
                                            0);
         columnaDatosGraficos->type(Fl_Pack::VERTICAL);
         columnaDatosGraficos->spacing(spacingWidgetsColumnaDatosGraficos); // espacio vertical entre widgets
-        // columnaDatosGraficos->box(FL_THIN_UP_BOX);
 
         // TEXTO DE TEMPERATURA DIGITAL LEIDA (ADC)
         textoADC = new Fl_Output{0, 0, 0, hWidgetsColumnaDatosGraficos, "ADC"};
@@ -600,6 +755,17 @@ public:
 
         columnaDatosGraficos->end();
         grupoColumnaDatosGraficos->end();
+
+        graficas = new Grafica{grupoColumnaDatosGraficos->x() + grupoColumnaDatosGraficos->w() + 0,
+                               grupoColumnaDatosGraficos->y(),
+                               650,
+                               grupoColumnaDatosGraficos->h(),
+                               "GRÁFICAS"};
+        //graficas->setRango(-500.0, 1000.0);
+        idADC = graficas->añadirSerie(FL_GREEN, 500.0, 1000.0);
+        idConsigna = graficas->añadirSerie(FL_BLUE, 500.0, 1000.0);
+        idError = graficas->añadirSerie(FL_RED, -500.0, 500.0);
+        idPWM = graficas->añadirSerie(FL_MAGENTA, 0.0, 255.0);
 
         config_GUI_lazo_abierto(); // Comenzamos en lazo abierto por defecto
         this->end();               // viene de Fl_Group.end()
@@ -725,6 +891,7 @@ void pantallaPrincipal::setup()
     serialData.actualizarModo(SerialData::Modo::LAZO_ABIERTO);
     serialData.enviarMensajeMODO();
     sliderPWM_callback(sliderPWM, this); // mandamos el PWM visible en el slider nada mas abrir la pantalla principal
+    config_GUI_lazo_abierto();
 }
 
 // Declaraciones de metodos de pantalla de bienvenida para poder definirlos despues de ambas pantallas y solucionar las dependencias circulares
