@@ -599,6 +599,7 @@ private:
 
     void config_GUI_lazo_cerrado()
     {
+        rbLazoCerrado->value(1);
         sliderPWM->deactivate();
         inputKp->activate();
         inputKi->activate();
@@ -624,6 +625,22 @@ private:
         textoError->deactivate();
     }
 
+    void lazo_cerrado()
+    {
+        config_GUI_lazo_cerrado();
+        serialData.actualizarModo(SerialData::Modo::LAZO_CERRADO);
+        serialData.enviarMensajeMODO();
+        actualizarPID_callback(botonActualizarPID, this); // para mandar los valores visibles mantalla nada mas cambiar a lazo cerrado, sin tener que pulsar el boton la primera vez
+    }
+
+    void lazo_abierto()
+    {
+        config_GUI_lazo_abierto();
+        serialData.actualizarModo(SerialData::Modo::LAZO_ABIERTO);
+        serialData.enviarMensajeMODO();
+        sliderPWM_callback(sliderPWM, this); // para mandar el valor visible en el slider inmediatamente, sin tener que moverlo la primera vez
+    }
+
     static void radio_callback(Fl_Widget *w, void *data) // accion de los radio buttons, para conmutar entre lazo abierto y cerrado
     {
         pantallaPrincipal *self = static_cast<pantallaPrincipal *>(data);
@@ -631,18 +648,12 @@ private:
         if (self->rbLazoCerrado->value() == 1)
         {
             // LAZO CERRADO
-            self->config_GUI_lazo_cerrado();
-            self->serialData.actualizarModo(SerialData::Modo::LAZO_CERRADO);
-            self->serialData.enviarMensajeMODO();
-            self->actualizarPID_callback(self->botonActualizarPID, self); // para mandar los valores visibles mantalla nada mas cambiar a lazo cerrado, sin tener que pulsar el boton la primera vez
+            self->lazo_cerrado();
         }
         else
         {
             // LAZO ABIERTO
-            self->config_GUI_lazo_abierto();
-            self->serialData.actualizarModo(SerialData::Modo::LAZO_ABIERTO);
-            self->serialData.enviarMensajeMODO();
-            self->sliderPWM_callback(self->sliderPWM, self); // para mandar el valor visible en el slider inmediatamente, sin tener que moverlo la primera vez
+            self->lazo_abierto();
         }
     }
 
@@ -914,10 +925,7 @@ void pantallaPrincipal::setup()
     // seran cosas independientes de la interfaz (es bueno separar la logica de la interfaz y la logica de comportamiento)
     activar_lectura();
     actualizar_titulo();
-    serialData.actualizarModo(SerialData::Modo::LAZO_ABIERTO);
-    serialData.enviarMensajeMODO();
-    sliderPWM_callback(sliderPWM, this); // mandamos el PWM visible en el slider nada mas abrir la pantalla principal
-    config_GUI_lazo_abierto();
+    lazo_abierto();
 }
 
 // Declaraciones de metodos de pantalla de bienvenida para poder definirlos despues de ambas pantallas y solucionar las dependencias circulares
