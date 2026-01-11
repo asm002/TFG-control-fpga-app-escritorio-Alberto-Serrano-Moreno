@@ -97,7 +97,7 @@ public:
 
         if (!SetCommState(_serialHandle, &serialParams))
         {
-            CloseHandle(_serialHandle);
+            // CloseHandle(_serialHandle);
             throw std::runtime_error("No se pudo configurar el puerto serie.");
         }
 
@@ -108,7 +108,7 @@ public:
 
         if (!SetCommTimeouts(_serialHandle, &t))
         {
-            CloseHandle(_serialHandle);
+            // CloseHandle(_serialHandle);
             throw std::runtime_error("No se pudo configurar los timeouts del puerto serie.");
         }
         // BORRAR LOS BUFFERS INTERNOS DE WINDOWS PARA EL PUERTO:
@@ -129,7 +129,7 @@ public:
 
         if (!WriteFile(_serialHandle, data.c_str(), data.size(), &bytesWritten, NULL)) // aqui se produce el envio real. serialHandle representa al puerto abierto. NULL: operacion sincrona
         {
-            CloseHandle(_serialHandle);
+            // CloseHandle(_serialHandle);
             throw std::runtime_error("No se pudo enviar el dato por el puerto serie.");
         }
     }
@@ -139,7 +139,7 @@ public:
         DWORD bytesWritten{0};
         if (!WriteFile(_serialHandle, data.c_str(), data.size(), &bytesWritten, NULL))
         {
-            CloseHandle(_serialHandle);
+            // CloseHandle(_serialHandle);
             throw std::runtime_error("No se pudo enviar la cadena por el puerto serie.");
         }
 
@@ -168,7 +168,7 @@ public:
         char tempBuffer[64];                                                              // buffer temporal de lectura
         if (!ReadFile(_serialHandle, &tempBuffer, sizeof(tempBuffer), &_bytesRead, NULL)) // aqui se produce la lectura de sizeof(tempBuffer) = 64 bytes
         {
-            CloseHandle(_serialHandle);
+            // CloseHandle(_serialHandle);
             throw std::runtime_error("No se pudo leer del puerto serie.");
         }
 
@@ -548,12 +548,10 @@ class pantallaPrincipal : public Fl_Group
 {
 private:
     // Todas las funciones de callback deben ser static, para ser funciones de clase y no de objeto, y no llevar implicitamente el puntero this al objeto propio, ya que la firma que acepta FLTK debe ser la que es y no llevar nada extra
-    static void botonVolver_callback(Fl_Widget *w, void *data)
+    static void botonCerrar_callback(Fl_Widget *w, void *data)
     {
-        pantallaPrincipal *self = static_cast<pantallaPrincipal *>(data);
-        puertoSerie.reset();     // destruye el SerialPort
-        self->detener_lectura(); //  paramos el timer porque si no, sigue accediendo al timeout_callback y peta
-        self->wizard->prev();
+        Fl_Window *ventana = static_cast<Fl_Window *>(data);
+        ventana->hide();
     }
 
     static void sliderPWM_callback(Fl_Widget *w, void *data)
@@ -674,7 +672,7 @@ public:
     Fl_Wizard *wizard;
 
     Fl_Box *titulo;
-    Fl_Button *botonVolver;
+    Fl_Button *botonCerrar;
 
     Fl_Group *panelControl;
     Fl_Box *tituloPanel;
@@ -732,25 +730,23 @@ public:
         titulo->labelsize(30);
         titulo->labelfont(FL_BOLD);
 
-        // BOTON VOLVER (por ahora sirve para cambiar de puerto. Dara problemas en el futuro cuando haya mas cosas?)
-        // se me ocurre que quiza sea mejor que sea un boton "reiniciar", que te lleve a la pantalla de bienvenida pero reseteando todo, como si volvieras a ejecutar el programa
-        const int wBotonVolver = 100;
-        const int hBotonVolver = 40;
-        const int xBotonVolver = 15;
-        const int yBotonVolver = 15;
-        botonVolver = new Fl_Button{xBotonVolver, yBotonVolver, wBotonVolver, hBotonVolver, "Volver"};
-        botonVolver->labelsize(20);
-        botonVolver->labelfont(FL_BOLD);
-        botonVolver->callback(botonVolver_callback, this);
+        // BOTON CERRAR (cierra el programa como la X de la ventana)
+        const int wbotonCerrar = 100;
+        const int hbotonCerrar = 40;
+        const int xbotonCerrar = 15;
+        const int ybotonCerrar = 15;
+        botonCerrar = new Fl_Button{xbotonCerrar, ybotonCerrar, wbotonCerrar, hbotonCerrar, "Cerrar"};
+        botonCerrar->labelsize(20);
+        botonCerrar->labelfont(FL_BOLD);
+        botonCerrar->callback(botonCerrar_callback, this->parent()->parent());
 
         configurarPanelControl(300,
-                               v->h() - 2 * (yBotonVolver + hBotonVolver + 30),
-                               xBotonVolver,
-                               yBotonVolver + hBotonVolver + 30,
+                               v->h() - 2 * (ybotonCerrar + hbotonCerrar + 30),
+                               xbotonCerrar,
+                               ybotonCerrar + hbotonCerrar + 30,
                                10);
 
         // COLUMNA DE VALORES DE LAS VARIABLES GRAFICADAS
-        // esto ira luego en el panel de graficas
         constexpr int hWidgetsColumnaDatosGraficos = 35;
         constexpr int spacingWidgetsColumnaDatosGraficos = 80;
         constexpr int margen = 15;
