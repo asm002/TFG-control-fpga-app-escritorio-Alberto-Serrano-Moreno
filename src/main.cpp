@@ -31,12 +31,14 @@
 using namespace std;
 
 #define PERIODO_INTERRUPCION_PERIODICA 0.05 // en segundos. Actualmente 10ms. Deberia poder subirse sin problema hasta 50ms y los datos siguen llegando a la misma velocidad (cada 100ms)
+#define VENTANA_DEBUG                       // comentar esta linea para que no se lanze la ventana terminal extra
 
 #define KP0 8.0
 #define KI0 0.6
 #define KD0 2.0
 #define REF0 600
 
+// uso esta ventana extra para observar los mensajes que mando al micro
 void abrirConsolaDebug()
 {
 #ifdef _WIN32
@@ -54,18 +56,9 @@ class SerialPort; // declaracion antes de definir la clase para poder definir el
 class pantallaPrincipal;
 
 // VARIABLES GLOBALES
-string puertoString = "";
+string puertoString = "";                // nombre del puerto abierto
 vector<string> puertosGuardados;         // seria mejor que en vez de global, fuese una variable en la misma clase que el desplegable de puertos
 std::unique_ptr<SerialPort> puertoSerie; // (NO ES UN PUNTERO, ES UN OBJETO QUE CONTIENE UN PUNTERO ENTRE OTRAS COSAS): puntero inteligente global para el objeto puerto serie, que se construye en el callback de boton conectar pero el objeto no vive en el ambito del callback (porque sino, se destruiria al finalizar el callback)
-
-// DECLARACIONES DE METODOS DISPONIBLES PARA TODAS LAS PANTALLAS
-
-/**
- * Convierte el valor analógico raw de la STM32 a grados Celsius.
- * @param adcValue Valor leído del ADC (0 - 4095 para 12 bits).
- * @return Temperatura en grados Celsius.
- */
-double calcularCelsius(int adcValue);
 
 // CLASES Y STRUCT
 
@@ -84,7 +77,7 @@ public:
 
         if (_serialHandle == INVALID_HANDLE_VALUE)
         {
-            // CloseHandle(_serialHandle);   //no, segun chatgpt
+            // CloseHandle(_serialHandle);   // no hay que hacerlo aqui ni en ningun otro sitio, porque ya se encarga el destructor
             throw std::runtime_error("No se pudo abrir el puerto serie.");
         }
 
@@ -111,7 +104,7 @@ public:
             // CloseHandle(_serialHandle);
             throw std::runtime_error("No se pudo configurar los timeouts del puerto serie.");
         }
-        // BORRAR LOS BUFFERS INTERNOS DE WINDOWS PARA EL PUERTO:
+        // BORRAR LOS BUFFERS INTERNOS DE WINDOWS PARA EL PUERTO. Lo hago para no acumular basura anterior si hubiera
         // PURGE_RXCLEAR: Borra el buffer de entrada (lectura)
         // PURGE_TXCLEAR: Borra el buffer de salida (escritura)
         PurgeComm(_serialHandle, PURGE_RXCLEAR | PURGE_TXCLEAR);
@@ -122,7 +115,7 @@ public:
         CloseHandle(_serialHandle);
     }
 
-    void send(int value)
+    void send(int value) // no lo uso en el proyecto, pero lo dijo porque lo hicimos en clase
     {
         std::string data = std::to_string(value) + "\n"; // mandamos una cadena de caracteres (string, formato ASCII) terminada en \n (delimitador). Por ejemplo: "123\n"
         DWORD bytesWritten{0};                           // tipo de datos de windows (unsigned 32 bits). WriteFile escribre en esta variable cuantos bytes se han enviado
@@ -198,7 +191,7 @@ public:
         return "";
     }
 
-    int read()
+    int read() // tampoco lo uso
     {
         if (!ReadFile(_serialHandle, &_data, 1, &_bytesRead, NULL)) // aqui se produce la lectura de 1 byte.
         {
@@ -237,7 +230,7 @@ public:
         return -1; // cuando se este cargando el buffer (dato incompleto) o cuando no se haya leido nada aun
     }
 
-    static std::vector<std::string> buscar_puertos_serie()
+    static std::vector<std::string> buscar_puertos_serie() // mira en los registros de windows y devuelve nombres tipo "COMx"
     {
         std::vector<std::string> puertos;
         HKEY hKey;
@@ -274,7 +267,7 @@ private:
     std::string _buffer{""};
 };
 
-class SerialData
+class SerialData // clase que encapsula todo lo relacionado con los mensajes enviados y recibidos por el puerto serie. Tambien almacena los datos graficos
 {
 public:
     double kp;
@@ -288,7 +281,7 @@ public:
         LAZO_CERRADO
     };
 
-    struct DatosGraficos
+    struct DatosGraficos // todos los datos que se grafican provienen del micro. No se hace ningun calculo intermedio (aparte del escalado para la grafica)
     {
         float consigna = 0.0f;
         float temperatura = 0.0f;
@@ -560,7 +553,7 @@ private:
         pantallaPrincipal *self = static_cast<pantallaPrincipal *>(data);
 
         int valorDelSlider = pSlider->value();
-        self->serialData.enviarMensajePWM(valorDelSlider);
+        self->serialData.enviarMensajePWM(valorDelSlider); // sí, se manda un mensaje cada vez que cambia el valor, lo cual no es eficiente, seria mejor mandarlo al soltar el slider, pero lo prefiero asi porque me gusta el efecto de cambio continuo y la velocidad de transmision y de lectura del micro es suficiente. Tampoco se envia nada mas mientras, por lo que no se compromete ninguna informacion
     }
 
     static void timeout_callback(void *data) // lectura periodica del puerto serie
@@ -685,7 +678,7 @@ public:
     Fl_Hor_Value_Slider *sliderREF;
     Fl_Button *botonActualizarPID;
 
-    SerialData serialData;
+    SerialData serialData; // lo que no son widgets de FLTK, lo creo sin puntero
 
     Fl_Group *grupoColumnaDatosGraficos;
     Fl_Pack *columnaDatosGraficos;
@@ -931,11 +924,13 @@ void botonActualizar_callback(Fl_Widget *w, void *data);
 
 int main()
 {
+#ifdef VENTANA_DEBUG
     abrirConsolaDebug();
+#endif
 
     std::cout << "Debug iniciado\n";
 
-    Fl_Window ventana(0, 0, 1200, 676, "Control de temperatura - Alberto Serrano Moreno");
+    Fl_Window ventana(0, 0, 1200, 676, "Control PID de temperatura - Alberto Serrano Moreno");
     Fl_Wizard wizard{0, 0, ventana.w(), ventana.h()}; // widget invisible con el mismo tamaño que la ventana que nos sirve para iterar la visibilidad de sus grupos hijos
 
     pantallaPrincipal *pPrincipal = nullptr; //  puntero vacio por ahora. Para poder pasar la direccion de principal antes de que el objeto haya sido creado
@@ -946,7 +941,7 @@ int main()
     Fl_Group grupoBienvenida(0, 0, ventana.w(), ventana.h());
 
     // TITULO
-    Fl_Box tituloBienvenida(0, ventana.h() / 4, ventana.w(), 40, "Control PID de temperatura");
+    Fl_Box tituloBienvenida(0, ventana.h() / 4, ventana.w(), 40, "Control PID de Temperatura");
     tituloBienvenida.labelsize(40);
     tituloBienvenida.labelfont(FL_BOLD);
 
@@ -991,10 +986,10 @@ int main()
     pantallaPrincipal principal{&ventana, &wizard};
     dataConectar.pPrincipal = &principal; // una vez creada principal, pasamos su direccion a su puntero para poder usarse en el struct de conectar
 
+    // =========================
+
     wizard.end();
     ventana.end();
-
-    // wizard.value(&grupoPrincipal); // Página inicial
 
     ventana.show();
 
@@ -1059,37 +1054,4 @@ void botonActualizar_callback(Fl_Widget *w, void *data)
     pDesplegable->value(-1);
     pDesplegable->redraw();
     puertoString = "";
-}
-
-double calcularCelsius(int adcValue)
-{
-    // 1. Configuración del ADC (10 bits para STM32 en framework Arduino)
-    const double ADC_MAX = 1023.0;
-
-    // 2. Parámetros del hardware (Resistencia R3 en el esquemático)
-    const double RESISTENCIA_FIJA = 10000.0; // 10k Ohms
-
-    // 3. Parámetros del NTC (según datasheet)
-    const double R0 = 10000.0;  // Resistencia a 25°C
-    const double T0 = 298.15;   // 25°C en Kelvin (273.15 + 25)
-    const double BETA = 3380.0; // Constante B (25/50°C)
-
-    // Validación de seguridad para evitar divisiones por cero o logaritmos negativos
-    if (adcValue <= 0 || adcValue >= (int)ADC_MAX)
-    {
-        return 0.0;
-    }
-
-    // --- CÁLCULO ---
-
-    // Paso A: Calcular la resistencia actual del termistor
-    // Según tu esquema: VCC -> NTC -> ADC -> R3 -> GND
-    double rNtc = RESISTENCIA_FIJA * (ADC_MAX / (double)adcValue - 1.0);
-
-    // Paso B: Aplicar la ecuación Beta (Variante de Steinhart-Hart)
-    double logR = std::log(rNtc / R0);
-    double temperaturaK = 1.0 / (1.0 / T0 + logR / BETA);
-
-    // Paso C: Convertir de Kelvin a Celsius
-    return temperaturaK - 273.15;
 }
