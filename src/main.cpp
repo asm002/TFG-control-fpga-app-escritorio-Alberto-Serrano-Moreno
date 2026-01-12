@@ -371,50 +371,52 @@ public:
 class Grafica : public Fl_Widget
 {
 private:
-    struct Serie
+    struct Serie // cada serie es una curva con un color
     {
-        std::vector<float> buffer;
+        std::vector<float> buffer; // cada serie tiene un buffer, donde se guardan todos sus puntos
         Fl_Color color;
-        float minValor;
+        float minValor; // cada serie tiene su escala
         float maxValor;
-        std::string nombre;
+        std::string nombre; // nombre para luego generar una leyenda
 
         Serie(const std::string &n, Fl_Color c, int capacidad, float minV, float maxV)
             : nombre(n), color(c), minValor(minV), maxValor(maxV)
         {
-            buffer.reserve(capacidad);
+            buffer.reserve(capacidad); // se reserva memoria antes de añadir elementos. Podria eliminarse pero tendria peor rendimiento por las realocaciones
+            // esto NO hace que .size() tenga un valor inicial igual a capacidad. Una cosa es el tamaño (elementos en el vector) y otra la capacidad en memoria (elementos que puede haber)
         }
     };
 
-    std::vector<Serie> series;
-    size_t maxPuntos;
+    std::vector<Serie> series; // vector donde se iran almacenando todas las series
+    size_t maxPuntos;          // puntos que tendra la grafica, segun su ancho
 
-    // Buffer offscreen para evitar parpadeos (se dibuja todo en memoria y luego se actualiza la pantalla de una vez)
-    Fl_Offscreen offscreen = 0;
+    Fl_Offscreen offscreen = 0; // buffer offscreen para evitar parpadeos (se dibuja todo en memoria y luego se actualiza la pantalla de una vez)
 
     static constexpr int MARGEN_Y = 8; // para que los valores extremos no se dibujen justo en el borde de la grafica y no se vean
 
     void dibujarLeyenda()
     {
+        // esquina donde empieza la leyenda
         int x0 = 8;
         int y0 = 8;
-        int dy = 16;
 
-        for (const auto &s : series)
+        int spacing = 16;   // espacio entre cada elemento de la leyenda
+
+        for (const Serie &s : series)
         {
-            // Color
+            // cuadrado para indicar el color que tiene la serie
             fl_color(s.color);
             fl_rectf(x0, y0 + 4, 10, 10);
 
-            // Texto
+            // texto (no es un fl_output ni fl_box, se puede dibujar texto directamente)
             fl_color(FL_BLACK);
-            char txt[128];
+            char txt[64];   // buffer temporal donde construimos el string con formato fprintf
             snprintf(txt, sizeof(txt), "%s [ %g --> %g ]",
                      s.nombre.c_str(), s.minValor, s.maxValor);
 
             fl_draw(txt, x0 + 16, y0 + 14);
 
-            y0 += dy;
+            y0 += spacing;
         }
     }
 
@@ -422,113 +424,117 @@ public:
     Grafica(int x, int y, int w, int h, const char *label = nullptr)
         : Fl_Widget(x, y, w, h, label), maxPuntos(w)
     {
-        box(FL_FLAT_BOX);
+        box(FL_FLAT_BOX); // recuadro alrededor de la grafica
 
-        offscreen = fl_create_offscreen(w, h);
+        offscreen = fl_create_offscreen(w, h); // crea el buffer en memoria para dibujar en memoria antes de mandar el dibujo
     }
 
     ~Grafica()
     {
         if (offscreen)
-            fl_delete_offscreen(offscreen);
+            fl_delete_offscreen(offscreen); // libera la memoria del buffer offscreen
     }
 
     int añadirSerie(const std::string &nombre, Fl_Color color, float minV, float maxV)
     {
-        series.emplace_back(nombre, color, maxPuntos, minV, maxV);
-        return series.size() - 1;
+        series.emplace_back(nombre, color, maxPuntos, minV, maxV); // emplace_back llama al constructor del objeto (Serie) y añade el objeto al final del vector
+        return series.size() - 1;                                  // para devolver el indice de la serie (primer indice es 0)
     }
 
     void añadirDato(int idSerie, float valor)
     {
-        if (idSerie < 0 || idSerie >= (int)series.size())
+        if (idSerie < 0 || idSerie >= (int)series.size()) // si el id no es valido no hacemos nada
             return;
 
-        Serie &s = series[idSerie];
+        Serie &s = series[idSerie]; // accedemos por referencia a la serie correspondiente al id (podria ser puntero en vez de referencia, da igual)
 
-        if (s.buffer.size() >= maxPuntos)
-            s.buffer.erase(s.buffer.begin());
+        if (s.buffer.size() >= maxPuntos)     // si ya hemos llenado la grafica:
+            s.buffer.erase(s.buffer.begin()); // borramos el primer elemento
 
-        s.buffer.push_back(valor);
+        s.buffer.push_back(valor); // añadimos al final el nuevo dato
 
-        redraw();
-    }
-
-    void resize(int X, int Y, int W, int H) override
-    {
-        Fl_Widget::resize(X, Y, W, H);
-
-        maxPuntos = W;
-
-        if (offscreen)
-            fl_delete_offscreen(offscreen);
-
-        offscreen = fl_create_offscreen(W, H);
+        redraw(); // redibujamos la grafica porque hay un dato nuevo
     }
 
     void draw() override
     {
-        if (!offscreen)
+        if (!offscreen) // barrera de seguridad por si no funciona el buffer de memoria
             return;
 
         // ==========================
         // DIBUJO EN MEMORIA
         // ==========================
-        fl_begin_offscreen(offscreen);
+        fl_begin_offscreen(offscreen); // empezar a dibujar en memoria
 
-        fl_push_clip(0, 0, w(), h());
+        fl_push_clip(0, 0, w(), h()); // para impedir dibujar fuera del area que se ve
 
         // Fondo
         fl_color(FL_WHITE);
         fl_rectf(0, 0, w(), h());
 
-        // Rejilla simple (línea central)
+        // linea horizontal central
         fl_color(fl_rgb_color(200, 200, 200));
         int yMedio = h() / 2;
         fl_line(0, yMedio, w(), yMedio);
 
-        // Series
-        for (const auto &s : series)
+        // bucle para dibujar cada serie
+        for (const Serie &s : series)
         {
-            if (s.buffer.size() < 2)
+            if (s.buffer.size() < 2) // si hay menos de 2 puntos, no hacemos nada todavia
                 continue;
 
-            fl_color(s.color);
-            fl_line_style(FL_SOLID, 2);
+            fl_color(s.color);          // cambiamos al color de la serie
+            fl_line_style(FL_SOLID, 2); // linea de grosor 2 continua
 
             float rango = s.maxValor - s.minValor;
-            if (rango == 0)
+            if (rango == 0) // evitar division por cero
                 rango = 1;
 
-            for (size_t i = 1; i < s.buffer.size(); ++i)
+            for (size_t i = 1; i < s.buffer.size(); ++i) // recorremos el buffer desde el segundo punto (i=1) hasta el ultimo (i= size - 1)
             {
-                float v0 = s.buffer[i - 1];
-                float v1 = s.buffer[i];
+                int x0 = i - 1; // punto X anterior
+                int x1 = i;     // punto X actual
 
-                float n0 = (v0 - s.minValor) / rango;
-                float n1 = (v1 - s.minValor) / rango;
+                float v0 = s.buffer[i - 1]; // valor anterior
+                float v1 = s.buffer[i];     // valor actual
 
-                int y0 = (h() - MARGEN_Y) - n0 * (h() - 2 * MARGEN_Y);
-                int y1 = (h() - MARGEN_Y) - n1 * (h() - 2 * MARGEN_Y);
+                // que tanto por uno corresponde el valor del punto respecto de la escala de la serie?
+                // si es ADC con [500 -> 1000] y tenemos v = 600 :
+                // (600 - 500) / (1000 - 500) = 20%
+                float proporcionV0 = (v0 - s.minValor) / rango;
+                float proporcionV1 = (v1 - s.minValor) / rango;
 
-                int x0 = i - 1;
-                int x1 = i;
+                // como el origen de y es en la parte superior en vez de abajo, el punto inicial y0 es y0 = h()
+                // como la coordenada y crece hacia abajo, yMin = h() ; yMax = 0
+                // por tanto, a yMin hay que restarle la proporcion de h
+
+                // y = h() - proporcion*h()
+
+                // para tener un margen superior e inferior de manera que los valores maximos y minimos no se pinten debajo del borde (y no se vean)
+                // yMin = h() - MARGEN
+                // el alto total ya no es h(), es h() menos 2 veces el margen
+                // nuevo alto = h() - 2*MARGEN
+
+                // y_con_margenes = [h() - MARGEN] - proporcion*[h() - 2*MARGEN]
+
+                int y0 = (h() - MARGEN_Y) - proporcionV0 * (h() - 2 * MARGEN_Y);
+                int y1 = (h() - MARGEN_Y) - proporcionV1 * (h() - 2 * MARGEN_Y);
 
                 fl_line(x0, y0, x1, y1);
             }
         }
 
-        fl_line_style(0);
+        fl_line_style(0); // deja el estilo de linea como estaba en su valor por defecto
 
-        // Marco
+        // marco por encima de las curvas
         fl_color(FL_BLACK);
         fl_rect(0, 0, w(), h());
 
-        fl_pop_clip();
+        fl_pop_clip(); // deshace el push clip para permitir dibujar fuera del marco que dijimos
 
-        dibujarLeyenda();
+        dibujarLeyenda(); // leyenda por encima de las curvas tambien
 
-        fl_end_offscreen();
+        fl_end_offscreen(); // terminar de dibujar en memoria
 
         // ==========================
         // COPIA DE MEMORIA A PANTALLA
@@ -787,7 +793,6 @@ public:
                                650,
                                grupoColumnaDatosGraficos->h(),
                                "GRÁFICAS"};
-        // graficas->setRango(-500.0, 1000.0);
         idADC = graficas->añadirSerie("ADC", FL_GREEN, 500.0, 1000.0);
         idConsigna = graficas->añadirSerie("CONSIGNA", FL_BLUE, 500.0, 1000.0);
         idError = graficas->añadirSerie("ERROR", FL_RED, -500.0, 500.0);
