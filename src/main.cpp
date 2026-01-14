@@ -30,8 +30,8 @@
 
 using namespace std;
 
-#define PERIODO_INTERRUPCION_PERIODICA 0.05 // en segundos. Actualmente 10ms. Deberia poder subirse sin problema hasta 50ms y los datos siguen llegando a la misma velocidad (cada 100ms)
-#define VENTANA_DEBUG                       // comentar esta linea para que no se lanze la ventana terminal extra
+#define PERIODO_INTERRUPCION_PERIODICA 0.05 // en segundos. Actualmente 50ms. Deberia poder subirse sin problema hasta 50ms y los datos siguen llegando a la misma velocidad (cada 100ms)
+// #define VENTANA_DEBUG                       // comentar esta linea para que no se lanze la ventana terminal extra
 
 #define KP0 8.0
 #define KI0 0.6
@@ -400,7 +400,7 @@ private:
         int x0 = 8;
         int y0 = 8;
 
-        int spacing = 16;   // espacio entre cada elemento de la leyenda
+        int spacing = 16; // espacio entre cada elemento de la leyenda
 
         for (const Serie &s : series)
         {
@@ -410,7 +410,7 @@ private:
 
             // texto (no es un fl_output ni fl_box, se puede dibujar texto directamente)
             fl_color(FL_BLACK);
-            char txt[64];   // buffer temporal donde construimos el string con formato fprintf
+            char txt[64]; // buffer temporal donde construimos el string con formato fprintf
             snprintf(txt, sizeof(txt), "%s [ %g --> %g ]",
                      s.nombre.c_str(), s.minValor, s.maxValor);
 
@@ -759,7 +759,6 @@ public:
         grupoColumnaDatosGraficos = new Fl_Group{panelControl->x() + panelControl->w() + 50,
                                                  panelControl->y(),
                                                  100 + 2 * margen,
-                                                 //  4 * hWidgetsColumnaDatosGraficos + 4 * spacingWidgetsColumnaDatosGraficos + 1 * margen};
                                                  panelControl->h()};
         grupoColumnaDatosGraficos->box(FL_THIN_UP_BOX);
         columnaDatosGraficos = new Fl_Pack(grupoColumnaDatosGraficos->x() + margen,
