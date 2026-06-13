@@ -581,12 +581,12 @@ private:
             float error_recibido = self->serialData.datosGraficos.error;
             int pwm_recibido = self->serialData.datosGraficos.pwm;
 
-            self->textoADC->value(static_cast<double>(temperatura_recibida));
+            self->textoTemp->value(static_cast<double>(temperatura_recibida));
             self->textoConsigna->value(consigna_recibida);
             self->textoError->value(error_recibido);
             self->textoPWM->value(pwm_recibido);
 
-            self->graficas->añadirDato(self->idADC, temperatura_recibida);
+            self->graficas->añadirDato(self->idTemp, temperatura_recibida);
             self->graficas->añadirDato(self->idConsigna, consigna_recibida);
             self->graficas->añadirDato(self->idError, error_recibido);
             self->graficas->añadirDato(self->idPWM, pwm_recibido);
@@ -688,13 +688,13 @@ public:
 
     Fl_Group *grupoColumnaDatosGraficos;
     Fl_Pack *columnaDatosGraficos;
-    Fl_Output *textoADC;
+    Fl_Output *textoTemp;
     Fl_Output *textoConsigna;
     Fl_Output *textoError;
     Fl_Output *textoPWM;
 
     Grafica *graficas;
-    int idADC, idConsigna, idError, idPWM;
+    int idTemp, idConsigna, idError, idPWM;
 
     void activar_lectura()
     { // funcion que no es estatica porque requiere de que haya un objeto instanciado (y ademas no requiere una firma concreta impuesta)
@@ -768,9 +768,9 @@ public:
         columnaDatosGraficos->type(Fl_Pack::VERTICAL);
         columnaDatosGraficos->spacing(spacingWidgetsColumnaDatosGraficos); // espacio vertical entre widgets
 
-        // TEXTO DE TEMPERATURA DIGITAL LEIDA (ADC)
-        textoADC = new Fl_Output{0, 0, 0, hWidgetsColumnaDatosGraficos, "ADC"};
-        formatoWidgetsColumnaDatosGraficos(textoADC);
+        // TEXTO DE TEMPERATURA LEIDA
+        textoTemp = new Fl_Output{0, 0, 0, hWidgetsColumnaDatosGraficos, "Temperatura"};
+        formatoWidgetsColumnaDatosGraficos(textoTemp);
 
         // TEXTO CONSIGNA
         textoConsigna = new Fl_Output{0, 0, 0, hWidgetsColumnaDatosGraficos, "Consigna"};
@@ -792,9 +792,9 @@ public:
                                650,
                                grupoColumnaDatosGraficos->h(),
                                "GRÁFICAS"};
-        idADC = graficas->añadirSerie("ADC", FL_GREEN, 500.0, 1000.0);
-        idConsigna = graficas->añadirSerie("CONSIGNA", FL_BLUE, 500.0, 1000.0);
-        idError = graficas->añadirSerie("ERROR", FL_RED, -500.0, 500.0);
+        idTemp = graficas->añadirSerie("TEMPERATURA", FL_GREEN, -99.9, +99.9);
+        idConsigna = graficas->añadirSerie("CONSIGNA", FL_BLUE, -99.9, +99.9);
+        idError = graficas->añadirSerie("ERROR", FL_RED, -199.8, +199.8);
         idPWM = graficas->añadirSerie("PWM", FL_MAGENTA, 0.0, 255.0);
 
         config_GUI_lazo_abierto(); // Comenzamos en lazo abierto por defecto
@@ -934,7 +934,7 @@ int main()
 
     std::cout << "Debug iniciado\n";
 
-    Fl_Window ventana(0, 0, 1200, 676, "Control PID de temperatura - Alberto Serrano Moreno");
+    Fl_Window ventana(0, 0, 1200, 676, "Control PID de temperatura en FPGA - Alberto Serrano Moreno");
     Fl_Wizard wizard{0, 0, ventana.w(), ventana.h()}; // widget invisible con el mismo tamaño que la ventana que nos sirve para iterar la visibilidad de sus grupos hijos
 
     pantallaPrincipal *pPrincipal = nullptr; //  puntero vacio por ahora. Para poder pasar la direccion de principal antes de que el objeto haya sido creado
@@ -945,7 +945,7 @@ int main()
     Fl_Group grupoBienvenida(0, 0, ventana.w(), ventana.h());
 
     // TITULO
-    Fl_Box tituloBienvenida(0, ventana.h() / 4, ventana.w(), 40, "Control PID de Temperatura");
+    Fl_Box tituloBienvenida(0, ventana.h() / 4, ventana.w(), 40, "Control PID de Temperatura en FPGA");
     tituloBienvenida.labelsize(40);
     tituloBienvenida.labelfont(FL_BOLD);
 
