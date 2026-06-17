@@ -31,12 +31,12 @@
 using namespace std;
 
 #define PERIODO_INTERRUPCION_PERIODICA 0.05 // en segundos. Actualmente 50ms. Deberia poder subirse sin problema hasta 50ms y los datos siguen llegando a la misma velocidad (cada 100ms)
-// #define VENTANA_DEBUG                       // comentar esta linea para que no se lanze la ventana terminal extra
+#define VENTANA_DEBUG                       // comentar esta linea para que no se lanze la ventana terminal extra
 
 #define KP0 8.0
 #define KI0 0.6
 #define KD0 2.0
-#define REF0 600
+#define REF0 1.0
 
 // uso esta ventana extra para observar los mensajes que mando al micro
 void abrirConsolaDebug()
@@ -311,9 +311,9 @@ public:
 
     void enviarMensajePID()
     {
-        char buffer[64];                      // creamos un array de caracteres con tamaño suficiente para el mensaje
-        snprintf(buffer, sizeof(buffer),      // snprintf es como printf pero no escribe en consola, si no en un char[]. De esta manera controlamos perfectamente el tamaño y formato el mensaje que se enviara
-                 "PID %.2f %.2f %.2f %.2f\n", // PID <kp.00> <ki.00> <kd.00> <consigna.00>
+        char buffer[64];                                  // creamos un array de caracteres con tamaño suficiente para el mensaje
+        snprintf(buffer, sizeof(buffer),                  // snprintf es como printf pero no escribe en consola, si no en un char[]. De esta manera controlamos perfectamente el tamaño y formato el mensaje que se enviara
+                 "PID %+06.2f %+06.2f %+06.2f %+06.2f\n", // PID <kp.00> <ki.00> <kd.00> <consigna.00>
                  kp, ki, kd, consigna);
         puertoSerie->sendString(buffer);
     }
@@ -332,7 +332,7 @@ public:
 
         char buffer[16];
         snprintf(buffer, sizeof(buffer),
-                 "MODO %d\n", // MODO <0 = lazo abierto || 1 = lazo cerrado>
+                 "MODO %01d\n", // MODO <0 = lazo abierto || 1 = lazo cerrado>
                  modoInt);
         puertoSerie->sendString(buffer);
     }
@@ -341,7 +341,7 @@ public:
     {
         char buffer[16];
         snprintf(buffer, sizeof(buffer),
-                 "PWM %d\n", // PWM <valor>
+                 "PWM %04d\n", // PWM <valor>
                  pwm);
         puertoSerie->sendString(buffer);
     }
@@ -853,7 +853,7 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
     sliderPWM->callback(sliderPWM_callback, this);
     sliderPWM->labelsize(18);
     sliderPWM->textsize(16);
-    sliderPWM->bounds(0, 255);
+    sliderPWM->bounds(0, 1023);
     sliderPWM->step(1);
     sliderPWM->type(FL_HOR_NICE_SLIDER);
 
@@ -879,23 +879,26 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
 
     inputKp->value(KP0);
     inputKp->step(0.1);
+    inputKp->bounds(0, 99.99);
 
     inputKi->value(KI0);
     inputKi->step(0.01);
+    inputKi->bounds(0, 99.99);
 
     inputKd->value(KD0);
     inputKd->step(0.1);
+    inputKd->bounds(0, 99.99);
 
     yElementosPanel += 50;
     sliderREF = new Fl_Hor_Value_Slider{xElementosPanel,
                                         yElementosPanel,
                                         wElementosPanel,
                                         30,
-                                        "Consigna (digital)"};
+                                        "Consigna"};
     sliderREF->labelsize(18);
     sliderREF->textsize(16);
-    sliderREF->bounds(500, 1000);
-    sliderREF->step(1);
+    sliderREF->bounds(-99.9, +99.9);
+    sliderREF->step(0.1);
     sliderREF->value(REF0);
     sliderREF->type(FL_HOR_NICE_SLIDER);
 
