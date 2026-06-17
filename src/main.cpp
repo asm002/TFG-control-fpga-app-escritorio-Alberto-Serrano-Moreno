@@ -311,9 +311,9 @@ public:
 
     void enviarMensajePID()
     {
-        char buffer[64];                                  // creamos un array de caracteres con tamaño suficiente para el mensaje
-        snprintf(buffer, sizeof(buffer),                  // snprintf es como printf pero no escribe en consola, si no en un char[]. De esta manera controlamos perfectamente el tamaño y formato el mensaje que se enviara
-                 "PID %+06.2f %+06.2f %+06.2f %+06.2f\n", // PID <kp.00> <ki.00> <kd.00> <consigna.00>
+        char buffer[64];                                    // creamos un array de caracteres con tamaño suficiente para el mensaje
+        snprintf(buffer, sizeof(buffer),                    // snprintf es como printf pero no escribe en consola, si no en un char[]. De esta manera controlamos perfectamente el tamaño y formato el mensaje que se enviara
+                 "3-PID %+06.2f %+06.2f %+06.2f %+06.2f\n", // PID <kp.00> <ki.00> <kd.00> <consigna.00>
                  kp, ki, kd, consigna);
         puertoSerie->sendString(buffer);
     }
@@ -332,7 +332,7 @@ public:
 
         char buffer[16];
         snprintf(buffer, sizeof(buffer),
-                 "MODO %01d\n", // MODO <0 = lazo abierto || 1 = lazo cerrado>
+                 "1-MODO %01d\n", // MODO <0 = lazo abierto || 1 = lazo cerrado>
                  modoInt);
         puertoSerie->sendString(buffer);
     }
@@ -341,7 +341,7 @@ public:
     {
         char buffer[16];
         snprintf(buffer, sizeof(buffer),
-                 "PWM %04d\n", // PWM <valor>
+                 "2-PWM %04d\n", // PWM <valor>
                  pwm);
         puertoSerie->sendString(buffer);
     }
