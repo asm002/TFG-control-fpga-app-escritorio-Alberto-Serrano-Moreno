@@ -660,7 +660,17 @@ private:
     {
         pantallaPrincipal *self = static_cast<pantallaPrincipal *>(data);
 
-        self->serialData.actualizarDatosPID(self->inputKp->value(), self->inputKi->value(), self->inputKd->value(), self->sliderREF->value());
+        // 1. Forzar que los inputs se ajusten a los límites de su método bounds()
+        double kp_valido = self->inputKp->clamp(self->inputKp->value());
+        double ki_valido = self->inputKi->clamp(self->inputKi->value());
+        double kd_valido = self->inputKd->clamp(self->inputKd->value());
+
+        // 2. Actualizar visualmente el texto del input si el usuario escribió un exceso
+        self->inputKp->value(kp_valido);
+        self->inputKi->value(ki_valido);
+        self->inputKd->value(kd_valido);
+
+        self->serialData.actualizarDatosPID(kp_valido, ki_valido, kd_valido, self->sliderREF->value());
         self->serialData.enviarMensajePID(); // manda por el puerto serie el PID y la consigna
     }
 
@@ -878,7 +888,7 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
                                  "Kd:"};
 
     inputKp->value(KP0);
-    inputKp->step(0.1);
+    inputKp->step(0.01);
     inputKp->bounds(0, 99.99);
 
     inputKi->value(KI0);
@@ -886,7 +896,7 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
     inputKi->bounds(0, 99.99);
 
     inputKd->value(KD0);
-    inputKd->step(0.1);
+    inputKd->step(0.01);
     inputKd->bounds(0, 99.99);
 
     yElementosPanel += 50;
@@ -896,8 +906,8 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
                                         30,
                                         "Consigna"};
     sliderREF->labelsize(18);
-    sliderREF->textsize(16);
-    sliderREF->bounds(-99.9, +99.9);
+    sliderREF->textsize(14);
+    sliderREF->bounds(-99.90, +99.90);
     sliderREF->step(0.1);
     sliderREF->value(REF0);
     sliderREF->type(FL_HOR_NICE_SLIDER);
