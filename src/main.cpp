@@ -804,8 +804,8 @@ public:
                                "GRÁFICAS"};
         idTemp = graficas->añadirSerie("TEMPERATURA", FL_GREEN, -99.9, +99.9);
         idConsigna = graficas->añadirSerie("CONSIGNA", FL_BLUE, -99.9, +99.9);
-        idError = graficas->añadirSerie("ERROR", FL_RED, -199.8, +199.8);
-        idPWM = graficas->añadirSerie("PWM", FL_MAGENTA, 0.0, 255.0);
+        idError = graficas->añadirSerie("ERROR", FL_RED, -99.9, +99.9);
+        idPWM = graficas->añadirSerie("PWM", FL_MAGENTA, 0.0, 1023.0);
 
         config_GUI_lazo_abierto(); // Comenzamos en lazo abierto por defecto
         this->end();               // viene de Fl_Group.end()
