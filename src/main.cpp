@@ -802,10 +802,10 @@ public:
                                650,
                                grupoColumnaDatosGraficos->h(),
                                "GRÁFICAS"};
-        idTemp = graficas->añadirSerie("TEMPERATURA", FL_GREEN, -99.9, +99.9);
-        idConsigna = graficas->añadirSerie("CONSIGNA", FL_BLUE, -99.9, +99.9);
-        idError = graficas->añadirSerie("ERROR", FL_RED, -99.9, +99.9);
-        idPWM = graficas->añadirSerie("PWM", FL_MAGENTA, 0.0, 1023.0);
+        idTemp = graficas->añadirSerie("TEMPERATURA", FL_GREEN, -99.99, +99.99);
+        idConsigna = graficas->añadirSerie("CONSIGNA", FL_BLUE, -99.99, +99.99);
+        idError = graficas->añadirSerie("ERROR", FL_RED, -99.99, +99.99);
+        idPWM = graficas->añadirSerie("PWM", FL_MAGENTA, 0, 1023);
 
         config_GUI_lazo_abierto(); // Comenzamos en lazo abierto por defecto
         this->end();               // viene de Fl_Group.end()
@@ -907,8 +907,8 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
                                         "Consigna"};
     sliderREF->labelsize(18);
     sliderREF->textsize(14);
-    sliderREF->bounds(-99.90, +99.90);
-    sliderREF->step(0.1);
+    sliderREF->bounds(-99.99, +99.99);
+    sliderREF->step(0.01);
     sliderREF->value(REF0);
     sliderREF->type(FL_HOR_NICE_SLIDER);
 
