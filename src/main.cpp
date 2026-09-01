@@ -906,7 +906,7 @@ void pantallaPrincipal::configurarPanelControl(const int wPanel, const int hPane
                                         30,
                                         "Consigna"};
     sliderREF->labelsize(18);
-    sliderREF->textsize(14);
+    sliderREF->textsize(11);
     sliderREF->bounds(-99.99, +99.99);
     sliderREF->step(0.01);
     sliderREF->value(REF0);
